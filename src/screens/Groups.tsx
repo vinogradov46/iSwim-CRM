@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { rpc, supabase, hm, type Me } from '../lib'
+import { rpc, supabase, hm, gshort, type Me } from '../lib'
 import { useLoad, Loading, Err, Sheet, Pill, toast } from '../ui'
 
 type G = { id: string; branch_id: string; branch: string; title: string | null; pool: 'big' | 'small'; weekdays: number[]; start_time: string; duration_min: number
@@ -31,7 +31,7 @@ export default function Groups({ me, onBack }: { me: Me; onBack: () => void }) {
           return (
             <button className="row" key={g.id} onClick={() => setEdit(g)} style={g.active ? {} : { opacity: 0.55 }}>
               <span className="time">{hm(g.start_time)}</span>
-              <span className="grow"><span className="name">{g.branch} · {g.title || days(g.weekdays)}</span><br />
+              <span className="grow"><span className="name">{g.branch} · {gshort(g.title) || days(g.weekdays)}</span><br />
                 <span className="meta">{days(g.weekdays)} · {g.duration_min} мин · {g.pool === 'big' ? 'большая вода' : 'малая вода'} · {g.coach_name || 'без тренера'}</span>
                 {g.reserve_kids > 0 && <><br /><span className="meta">В резерве: {g.reserve_kids}</span></>}</span>
               {!g.active ? <Pill c="p-mut">закрыта</Pill> : <Pill c={full ? 'p-bad' : 'p-ok'}>{g.active_kids}/{g.capacity}</Pill>}

@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { rpc, supabase, dm, hm, money, phonePretty, phoneE164, balanceState, todayISO, type Me } from '../lib'
+import { rpc, supabase, dm, hm, gshort, gname, money, phonePretty, phoneE164, balanceState, todayISO, type Me } from '../lib'
 import { Sheet, useLoad, Loading, Err, Pill, toast } from '../ui'
 import PaySheet from './PaySheet'
 
@@ -191,7 +191,7 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
           <p className="sub">{mode === 'move' ? 'Куда перевести (основная группа меняется):' : 'Ещё одна группа — остаток занятий общий:'}</p>
           <input placeholder="Найти группу: филиал или время" value={q} onChange={(e) => setQ(e.target.value)} />
           <div className="chips">{(allGroups.data || []).filter((g: any) => `${g.branches?.name} ${g.title} ${hm(g.start_time)}`.toLowerCase().includes(q.toLowerCase())).slice(0, 30).map((g: any) =>
-            <button key={g.id} className="chip" onClick={() => act(mode, { group_id: g.id }, mode === 'move' ? 'Переведён' : 'Группа добавлена')}>{g.branches?.name} · {g.title || hm(g.start_time)}</button>)}</div>
+            <button key={g.id} className="chip" onClick={() => act(mode, { group_id: g.id }, mode === 'move' ? 'Переведён' : 'Группа добавлена')}>{g.branches?.name} · {gname(g.title, g.start_time)}</button>)}</div>
         </>}
         {mode === 'makeup' && <div className="miss" style={{ border: '1px solid var(--line)', borderRadius: 12 }}>
           <div className="seg">
@@ -204,7 +204,7 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
           {!sessions.data ? <Loading /> : <div className="chips">
             {sessions.data.filter((s: any) => s.status === 'planned').length === 0 && <span className="meta">В этот день занятий нет</span>}
             {sessions.data.filter((s: any) => s.status === 'planned').map((s: any) =>
-              <button key={s.session_id} className="chip" onClick={() => call('book_makeup', { p_session: s.session_id, p_child: id, p_kind: mkKind }, mkKind === 'transfer' ? 'Перенос записан' : 'Записан на отработку')}>{hm(s.start_time)} {s.branch} · {s.title}</button>)}
+              <button key={s.session_id} className="chip" onClick={() => call('book_makeup', { p_session: s.session_id, p_child: id, p_kind: mkKind }, mkKind === 'transfer' ? 'Перенос записан' : 'Записан на отработку')}>{hm(s.start_time)} {s.branch} · {gshort(s.title)}</button>)}
           </div>}
           <button className="btn sm ghost" onClick={() => setMode(null)}>Отмена</button>
         </div>}

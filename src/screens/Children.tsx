@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { rpc, supabase, phonePretty, phoneE164, balanceState, hm, todayISO, type Me } from '../lib'
+import { rpc, supabase, phonePretty, phoneE164, balanceState, gname, todayISO, type Me } from '../lib'
 import { useLoad, Loading, Err, Pill, Sheet, Chips, toast } from '../ui'
 import ChildCard from './ChildCard'
 import Groups from './Groups'
@@ -79,7 +79,7 @@ function Enroll({ onClose }: { onClose: (ok: boolean) => void }) {
       <div><label htmlFor="t">Телефон родителя</label><input id="t" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
       <div><span className="lbl">Откуда узнали</span><Chips options={['Instagram', 'Google', 'Сайт', 'Рекомендация', 'Telegram'].map((x) => [x, x] as [string, string])} value={src} onChange={setSrc} /></div>
       <div><span className="lbl">Филиал</span><Chips options={branches.map(([id, n]) => [id, n] as [string, string])} value={branch} onChange={(v) => { setBranch(v); setGid(null) }} /></div>
-      {branch && <div><span className="lbl">Группа</span><Chips options={gs.filter((g) => g.branch_id === branch).map((g) => { const x = load(g.id); return [g.id, `${g.title || hm(g.start_time)}${x ? ` · ${x.active_kids}/${x.capacity}` : ''}`] as [string, string] })} value={gid} onChange={setGid} /></div>}
+      {branch && <div><span className="lbl">Группа</span><Chips options={gs.filter((g) => g.branch_id === branch).map((g) => { const x = load(g.id); return [g.id, `${gname(g.title, g.start_time)}${x ? ` · ${x.active_kids}/${x.capacity}` : ''}`] as [string, string] })} value={gid} onChange={setGid} /></div>}
       {mode === 'trial' && <div><label htmlFor="d">Дата пробного</label><input id="d" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>}
       <Err e={err} />
       <button className="btn" disabled={busy} onClick={save}>{mode === 'trial' ? 'Записать на пробное' : mode === 'group' ? 'Добавить в группу' : 'Записать в резерв'}</button>

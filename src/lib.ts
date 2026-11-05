@@ -75,3 +75,8 @@ export function balanceState(c: { plan_kind: string; lessons_left: number; sub_e
   if (c.lessons_left === 1) return { t: 'Осталось 1', c: 'p-warn' }
   return { t: `Осталось ${c.lessons_left}`, c: c.plan_kind === 'annual' ? 'p-acc' : 'p-ok' }
 }
+
+/** Название группы без времени в конце («БВ Вс 15:45» → «БВ Вс») — когда время показано рядом отдельно */
+export const gshort = (title?: string | null) => (title || '').replace(/\s*\d{1,2}[:.]\d{2}\s*$/, '').trim()
+/** Название группы со временем ровно один раз */
+export const gname = (title: string | null | undefined, start?: string | null) => `${gshort(title)} ${hm(start)}`.trim()

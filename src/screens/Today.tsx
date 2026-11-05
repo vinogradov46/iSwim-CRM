@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { rpc, dateRu, todayISO, hm, dm, phonePretty, balanceState, type Me } from '../lib'
+import { rpc, dateRu, todayISO, hm, dm, phonePretty, balanceState, gshort, gname, type Me } from '../lib'
 
 const addDays = (iso: string, n: number) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
 import { useLoad, Loading, Err, Pill, Sheet, toast } from '../ui'
@@ -36,7 +36,7 @@ export default function Today({ me }: { me: Me }) {
               <div className="miss" key={s.session_id}>
                 <button className="row" style={{ padding: 0 }} onClick={() => s.status === 'planned' && setOpen({ id: s.session_id, day })}>
                   <span className="time">{hm(s.start_time)}</span>
-                  <span className="grow"><span className="name">{s.branch} · {s.title}</span><br />
+                  <span className="grow"><span className="name">{s.branch} · {gshort(s.title)}</span><br />
                     <span className="meta">{s.substitute_name ? `${s.substitute_name} (замена за ${s.coach_name})` : s.coach_name || 'тренер не назначен'}
                       {s.status === 'cancelled' ? ` · отменено: ${s.cancel_reason}` : ` · ${s.expected} детей${s.trials ? ` · пробных ${s.trials}` : ''}`}</span></span>
                   {s.status === 'cancelled' ? <Pill c="p-mut">Отменено</Pill> : isLate ? <Pill c="p-bad">Не отмечено</Pill>
@@ -67,7 +67,7 @@ function SessionActions({ s, reload }: { s: Sess; reload: () => void }) {
       {mode === 'sub' && (
         <Sheet onClose={() => setMode(null)}>
           <h2>Кто проведёт занятие?</h2>
-          <p className="sub">{s.branch} · {s.title}. Зарплату за занятие получит тот, кто проведёт.</p>
+          <p className="sub">{s.branch} · {gname(s.title, s.start_time)}. Зарплату за занятие получит тот, кто проведёт.</p>
           <div className="chips">
             {(staff.data || []).filter((x: any) => x.role === 'coach' && x.id !== s.coach_id).map((x: any) => (
               <button key={x.id} className="chip" onClick={() => act('set_substitute', { p_session: s.session_id, p_coach: x.id }, `Замена: ${x.full_name}`)}>{x.full_name}</button>
@@ -113,7 +113,7 @@ function Inbox({ data, reload, onOpen }: { data: any; reload: () => void; onOpen
         <div className="list">{data.unmarked.map((u: any) => (
           <button className="row" key={u.session_id} onClick={() => onOpen(u.session_id, u.date)}>
             <span className="time">{dm(u.date)}</span>
-            <span className="grow"><span className="name">{u.group}</span><br /><span className="meta">{hm(u.time)} · {u.coach || 'без тренера'}</span></span>
+            <span className="grow"><span className="name">{u.group}</span><br /><span className="meta">{u.coach || 'без тренера'}</span></span>
             <Pill c="p-bad">Отметить</Pill>
           </button>))}
         </div></>}
@@ -185,7 +185,7 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
   return (
     <>
       <button className="back" onClick={onBack}>← Назад</button>
-      {s && <div><h2>{s.branch} · {s.title}</h2><p className="sub" style={{ textTransform: 'capitalize' }}>{dateRu(day)} · {hm(s.start_time)} · {s.substitute_name ? `замена: ${s.substitute_name}` : s.coach_name}</p></div>}
+      {s && <div><h2>{s.branch} · {gshort(s.title)}</h2><p className="sub" style={{ textTransform: 'capitalize' }}>{dateRu(day)} · {hm(s.start_time)} · {s.substitute_name ? `замена: ${s.substitute_name}` : s.coach_name}</p></div>}
       {me.role !== 'coach' && canMark && <div className="warnbox">Вы правите отметки тренера. Каждое изменение попадёт в журнал</div>}
       {!canMark && s && <div className="note">{day > todayISO() ? 'Отмечать можно в день занятия.' : 'Отмечать можно только в день занятия. Позже исправляет администратор.'}</div>}
       <Err e={error} />
