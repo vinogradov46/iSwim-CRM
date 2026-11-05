@@ -48,7 +48,7 @@ export default function App() {
     <>
       <div className="app">
         <header><div className="brand">i<span>Swim</span> CRM</div></header>
-        <div className="me">
+        <div className="me mob-only">
           <div className="ava">{me.full_name.split(' ').map((w) => w[0]).join('').slice(0, 2)}</div>
           <div className="grow"><div className="name">{me.full_name}</div><div className="meta">{ROLE[me.role]}</div></div>
           <button className="btn sm ghost" onClick={() => supabase.auth.signOut()}>Выйти</button>
@@ -56,6 +56,9 @@ export default function App() {
         {body}
       </div>
       <nav className="tabs">
+        <div className="side-brand">i<span>Swim</span> CRM</div>
+        <div className="side-me"><div className="name">{me.full_name}</div><div className="meta">{ROLE[me.role]}</div>
+          <button className="btn sm ghost" onClick={() => supabase.auth.signOut()}>Выйти</button></div>
         <div className="tabs-in" style={{ gridTemplateColumns: `repeat(${tabs.length},1fr)` }}>
           {tabs.map(([id, l]) => (
             <button key={id} className="tab" aria-current={tab === id ? 'page' : undefined} onClick={() => { setTab(id); window.scrollTo(0, 0) }}>{l}</button>

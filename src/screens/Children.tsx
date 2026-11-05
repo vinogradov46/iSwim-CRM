@@ -30,8 +30,8 @@ export default function Children({ me }: { me: Me }) {
           {data.map((c) => {
             const st = c.status === 'active' ? balanceState({ ...c, frozen_until: null, paid_month: null }) : { t: STATUS.find((x) => x[0] === c.status)?.[1] || c.status, c: 'p-mut' }
             return (
-              <button className="row" key={c.child_id} onClick={() => setCard(c.child_id)}>
-                <span className="grow"><span className="name">{c.full_name}</span><br /><span className="meta">{c.groups || 'без группы'}</span><br /><span className="meta phone">{phonePretty(c.phone)}</span></span>
+              <button className="row" key={c.child_id} aria-current={card === c.child_id ? true : undefined} onClick={() => setCard(c.child_id)}>
+                <span className="grow cols"><span className="name">{c.full_name}</span><span className="meta">{c.groups || 'без группы'}</span><span className="meta phone">{phonePretty(c.phone)}</span></span>
                 <Pill c={st.c}>{st.t}</Pill>
               </button>
             )
@@ -39,7 +39,7 @@ export default function Children({ me }: { me: Me }) {
           {data.length === 80 && <div className="row meta">Показаны первые 80. Уточните поиск</div>}
         </div>
       )}
-      {card && <ChildCard id={card} me={me} onClose={() => { setCard(null); reload() }} />}
+      {card && <ChildCard key={card} id={card} me={me} onClose={() => { setCard(null); reload() }} />}
       {add && <Enroll onClose={(ok) => { setAdd(false); if (ok) reload() }} />}
     </>
   )

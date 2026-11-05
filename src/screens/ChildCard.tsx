@@ -39,14 +39,14 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
   async function call(fn: string, args: any, msg: string) {
     try { await rpc(fn, args); toast(msg); setMode(null); reload() } catch (e: any) { toast(e.message) }
   }
-  if (!data) return <Sheet onClose={onClose}>{error ? <Err e={error} /> : <Loading />}<button className="btn ghost" onClick={onClose}>Закрыть</button></Sheet>
+  if (!data) return <Sheet side onClose={onClose}>{error ? <Err e={error} /> : <Loading />}<button className="btn ghost" onClick={onClose}>Закрыть</button></Sheet>
   const c = data.child, f = data.family
   const st = c.status === 'active' ? balanceState(c) : { t: { trial: 'Пробное', reserve: 'Резерв', left: 'Ушёл', lost: 'Не дошёл' }[c.status as string] || c.status, c: 'p-mut' }
   const gone = c.status === 'left' || c.status === 'lost'
 
   if (mode === 'pay' && self) return <PaySheet childId={id} me={self} plan={c.status === 'trial' ? 'trial' : undefined} onClose={(ok) => { setMode(null); if (ok) reload() }} />
   return (
-    <Sheet onClose={onClose}>
+    <Sheet side onClose={onClose}>
       <h2>{c.full_name}</h2>
       <div className="chips">
         <Pill c={st.c}>{st.t}</Pill>

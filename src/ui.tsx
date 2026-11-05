@@ -1,15 +1,15 @@
 import { useEffect, useState, type ReactNode } from 'react'
 
 /** Нижняя шторка */
-export function Sheet({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+export function Sheet({ onClose, children, side }: { onClose: () => void; children: ReactNode; side?: boolean }) {
   useEffect(() => {
     const k = (e: KeyboardEvent) => e.key === 'Escape' && onClose()
     window.addEventListener('keydown', k)
     return () => window.removeEventListener('keydown', k)
   }, [onClose])
   return (
-    <div className="scrim" onClick={(e) => e.target === e.currentTarget && onClose()}>
-      <div className="sheet" role="dialog" aria-modal="true">{children}</div>
+    <div className={side ? 'scrim side' : 'scrim'} onClick={(e) => e.target === e.currentTarget && onClose()}>
+      <div className="sheet" role="dialog" aria-modal={side ? undefined : true}><button className="x" aria-label="Закрыть" onClick={onClose}>×</button>{children}</div>
     </div>
   )
 }

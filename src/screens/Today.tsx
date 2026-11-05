@@ -19,8 +19,10 @@ export default function Today({ me }: { me: Me }) {
   if (open) return <Session id={open.id} day={open.day} me={me} onBack={() => { setOpen(null); reload(); inbox.reload() }} />
   const late = (data || []).filter((s) => s.status === 'planned' && s.ended && s.marked < s.expected)
   return (
-    <>
-      {office && <Inbox data={inbox.data} reload={() => { inbox.reload(); reload() }} onOpen={(id, d) => setOpen({ id, day: d })} />}
+    <div className={office ? 'split' : 'col'}>
+      {office && <section className="col"><Inbox data={inbox.data} reload={() => { inbox.reload(); reload() }} onOpen={(id, d) => setOpen({ id, day: d })} />
+        {inbox.data && !inbox.data.sick?.length && !inbox.data.handovers?.length && !inbox.data.tasks?.length && !inbox.data.unmarked?.length && !inbox.data.incoming && <div className="okbox desk-only">Входящих дел нет</div>}</section>}
+      <section className="col">
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <h2 className="grow" style={{ textTransform: 'capitalize' }}>{dateRu(day)}</h2>
         <input type="date" value={day} onChange={(e) => setDay(e.target.value)} style={{ width: 'auto' }} aria-label="Дата" />
@@ -48,7 +50,8 @@ export default function Today({ me }: { me: Me }) {
           })}
         </div>
       )}
-    </>
+      </section>
+    </div>
   )
 }
 
@@ -183,7 +186,7 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
   const rows = data || []
   const unmarked = rows.filter((c) => c.kind === 'group' && !c.mark && !(c.frozen_until && c.frozen_until > day)).length
   return (
-    <>
+    <div className="col narrow">
       <button className="back" onClick={onBack}>← Назад</button>
       {s && <div><h2>{s.branch} · {gshort(s.title)}</h2><p className="sub" style={{ textTransform: 'capitalize' }}>{dateRu(day)} · {hm(s.start_time)} · {s.substitute_name ? `замена: ${s.substitute_name}` : s.coach_name}</p></div>}
       {me.role !== 'coach' && canMark && <div className="warnbox">Вы правите отметки тренера. Каждое изменение попадёт в журнал</div>}
@@ -235,7 +238,7 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
       <p className="note">«Был» и «Пропуск» списывают занятие. «Болеет — будет справка» тоже списывает, но попадает администратору: когда принесут справку, он вернёт занятие или даст бесплатную отработку. Бесплатная отработка не списывается.</p>
       {pay && <PaySheet childId={pay} me={me} plan={rows.find((r) => r.child_id === pay)?.kind === 'trial' ? 'trial' : undefined} onClose={(ok) => { setPay(null); if (ok) reload() }} />}
       {card && <ChildCard id={card} onClose={() => { setCard(null); reload() }} />}
-    </>
+    </div>
   )
 }
 
