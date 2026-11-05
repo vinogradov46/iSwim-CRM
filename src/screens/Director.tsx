@@ -41,7 +41,15 @@ export function Journal() {
   const name = (id: string | null) => (id ? staff.data?.find((s: any) => s.id === id)?.full_name : 'Система') || '…'
   const A: Record<string, string> = { attendance: 'Отметка', attendance_fix: 'Правка отметки (офис)', attendance_cleared: 'Отметка снята', payment: 'Оплата', payment_cancel: 'Отмена оплаты',
     enroll: 'Запись', cash_handover: 'Сдал наличные', cash_confirmed: 'Получены наличные', sick_resolved: 'Пропуск по болезни', epos_import: 'Загрузка отчёта EPOS', expired: 'Сгорание остатка',
-    session_cancel: 'Отмена занятия', substitute: 'Замена', makeup: 'Отработка', pay_scheme: 'Ставка тренера', notes: 'Особенности', skill: 'Навык', task_done: 'Задача', trial_mark: 'Пробное' }
+    session_cancel: 'Отмена занятия', substitute: 'Замена', makeup: 'Отработка', pay_scheme: 'Ставка тренера', notes: 'Особенности', skill: 'Навык', task_done: 'Задача', trial_mark: 'Пробное',
+    absence_refund: 'Пропуск: занятие возвращено', absence_credit: 'Пропуск: дана отработка', absence_kept: 'Пропуск: оставлено списанным', certificate: 'Справка',
+    makeup_cancel: 'Отмена отработки', group_add: 'Новая группа', group_edit: 'Изменена группа', group_coach: 'Смена тренера группы', group_on: 'Группа открыта', group_off: 'Группа закрыта',
+    staff_add: 'Новый сотрудник', staff_edit: 'Изменён сотрудник', staff_on: 'Доступ включён', staff_off: 'Доступ отключён', staff_password: 'Выдан временный пароль', password_changed: 'Сменил пароль',
+    bot_ignored: 'Платёж EPOS пропущен', bot_matched: 'Платёж EPOS привязан', import_journal: 'Импорт журнала', child_edit: 'Изменены данные ребёнка', freeze: 'Заморозка', unfreeze: 'Разморозка',
+    leave: 'Ушёл', return: 'Вернулся', move: 'Перевод в группу', add_group: 'Добавлена группа', remove_group: 'Убрана группа', to_reserve: 'В резерв', from_reserve: 'Из резерва',
+    retrial: 'Перенос пробного', task: 'Напоминание', set_balance: 'Корректировка баланса', set_sub_end: 'Срок абонемента', cert: 'Справка', edit: 'Изменены данные ребёнка',
+    staff_login: 'Выдан вход сотруднику', groups_coach: 'Тренер назначен на группы' }
+  const label = (a: string) => A[a] || (a.startsWith('child_') && A[a.slice(6)]) || a
   return (
     <>
       <h2>Журнал изменений</h2>
@@ -49,7 +57,7 @@ export function Journal() {
       <Err e={error} />
       {!data ? <Loading /> : <div className="list">{data.map((j: any) => (
         <div className="row" key={j.id}><span className="grow"><span className="meta">{new Date(j.at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · {name(j.actor_id)}</span><br />
-          {A[j.action] || j.action}{j.children?.full_name ? `: ${j.children.full_name}` : ''}{j.details?.amount ? ` · ${money(j.details.amount)} BYN` : ''}{j.details?.reason ? ` · ${j.details.reason}` : ''}</span></div>))}</div>}
+          {label(j.action)}{j.children?.full_name ? `: ${j.children.full_name}` : ''}{j.details?.amount ? ` · ${money(j.details.amount)} BYN` : ''}{j.details?.reason ? ` · ${j.details.reason}` : ''}</span></div>))}</div>}
     </>
   )
 }

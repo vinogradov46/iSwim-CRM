@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { rpc, supabase, dm, hm, gshort, gname, money, phonePretty, phoneE164, balanceState, todayISO, type Me } from '../lib'
 import { Sheet, useLoad, Loading, Err, Pill, toast } from '../ui'
 import PaySheet from './PaySheet'
+import TrialDates from './TrialDates'
 
 const LEFT = ['Переезд', 'Дорого', 'Неудобное время', 'Не понравилось', 'Болезнь', 'Другое']
 const LOST = ['Не понравилось', 'Дорого', 'Неудобное время', 'Не отвечает', 'Передумали', 'Другое']
@@ -166,7 +167,7 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
         {mode === 'leave' && <><p className="sub">{c.status === 'trial' ? 'Почему не дошёл после пробного?' : 'Причина ухода'}</p>
           <div className="chips">{(c.status === 'trial' ? LOST : LEFT).map((r) => <button key={r} className="chip" onClick={() => act('leave', { reason: r }, 'Отмечено')}>{r}</button>)}</div></>}
         {mode === 'retrial' && <div className="miss" style={{ border: '1px solid var(--line)', borderRadius: 12 }}>
-          <label htmlFor="td">Новая дата пробного</label><input id="td" type="date" value={trialDay} min={todayISO()} onChange={(e) => setTrialDay(e.target.value)} />
+          <span className="lbl">Новая дата пробного</span><TrialDates group={c.group_id} value={trialDay} onChange={setTrialDay} />
           <div className="acts"><button className="btn sm" onClick={() => act('retrial', { date: trialDay }, 'Пробное перенесено')}>Сохранить</button><button className="btn sm ghost" onClick={() => setMode(null)}>Отмена</button></div>
         </div>}
         {mode === 'task' && <div className="miss" style={{ border: '1px solid var(--line)', borderRadius: 12 }}>
