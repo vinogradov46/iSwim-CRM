@@ -1,5 +1,7 @@
 import { useState } from 'react'
 import { rpc, dateRu, todayISO, hm, dm, phonePretty, balanceState, type Me } from '../lib'
+
+const addDays = (iso: string, n: number) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
 import { useLoad, Loading, Err, Pill, Sheet, toast } from '../ui'
 import PaySheet from './PaySheet'
 import ChildCard from './ChildCard'
@@ -206,6 +208,8 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
                 </button>
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                   {bday && <Pill c="p-acc">День рождения</Pill>}
+                  {c.kind !== 'trial' && (!c.cert_until || c.cert_until < day ? <Pill c="p-bad">Нет справки</Pill>
+                    : c.cert_until <= addDays(day, 14) ? <Pill c="p-warn">Справка до {dm(c.cert_until)}</Pill> : null)}
                   <Pill c={st.c}>{st.t}</Pill>
                   {!frozen && <button className="btn sm ghost" onClick={() => setPay(c.child_id)}>+ Оплата</button>}
                 </div>

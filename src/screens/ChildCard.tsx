@@ -75,6 +75,20 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
           <div className="acts" style={{ marginTop: 6 }}><button className="btn sm" onClick={() => call('update_child_notes', { p_child: id, p_notes: notes }, 'Сохранено')}>Сохранить</button><button className="btn sm ghost" onClick={() => setMode(null)}>Отмена</button></div>
         </> : <div style={{ display: 'flex', gap: 8 }}><span className="grow" style={c.notes ? { color: 'var(--warn)', fontWeight: 600 } : {}}>{c.notes || 'Ничего не указано'}</span><button className="btn sm ghost" onClick={() => { setNotes(c.notes || ''); setMode('notes') }}>Изменить</button></div>}
       </div>
+      <div><span className="lbl">Медицинская справка</span>
+        {(() => { const ok = c.cert_until && c.cert_until >= todayISO(); const soon = ok && c.cert_until <= addDays(14)
+          return <div className={ok ? (soon ? 'warnbox' : 'okbox') : 'errbox'}>{ok ? (soon ? `Справка заканчивается ${dm(c.cert_until)} — напомните родителям принести новую` : `Справка есть, действует до ${dm(c.cert_until)}.${c.cert_until.slice(0, 4)}`) : c.cert_until ? `Справка просрочена с ${dm(c.cert_until)}. Ребёнок занимается без справки — напомните родителям` : 'Справки нет. Ребёнок занимается без справки — напомните родителям'}</div> })()}
+        {mode === 'certset' ? <div className="miss" style={{ border: '1px solid var(--line)', borderRadius: 12, marginTop: 6 }}>
+          <span className="lbl">Справка принесена. Действует:</span>
+          <div className="chips">{[[90, '3 месяца'], [180, '6 месяцев'], [365, '1 год']].map(([d, l]) => <button key={d} className="chip" onClick={() => call('set_certificate', { p_child: id, p_until: addDays(d as number) }, 'Справка отмечена')}>{l as string}</button>)}</div>
+          <label htmlFor="cu">или до даты (как написано в справке)</label>
+          <input id="cu" type="date" min={todayISO()} value={subEnd} onChange={(e) => setSubEnd(e.target.value)} />
+          <div className="acts"><button className="btn sm" disabled={!subEnd} onClick={() => call('set_certificate', { p_child: id, p_until: subEnd }, 'Справка отмечена')}>Сохранить дату</button><button className="btn sm ghost" onClick={() => setMode(null)}>Отмена</button></div>
+        </div> : <div className="acts" style={{ marginTop: 6 }}>
+          <button className="btn sm okb" onClick={() => { setSubEnd(''); setMode('certset') }}>Принёс справку</button>
+          {c.cert_until && <button className="btn sm ghost" onClick={() => call('set_certificate', { p_child: id, p_until: null }, 'Отмечено: справки нет')}>Справки нет</button>}
+        </div>}
+      </div>
       {skills.data && skills.data.length > 0 && <div><span className="lbl">Навыки · {data.skills.length} из {skills.data.length}</span>
         <div className="skills">{skills.data.map((s: any) => (
           <button key={s.id} className="skill" aria-pressed={data.skills.includes(s.id)} onClick={async () => { try { await rpc('toggle_skill', { p_child: id, p_skill: s.id }); reload() } catch (e: any) { toast(e.message) } }}>
@@ -133,7 +147,6 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
             <button className="btn sm ghost" onClick={() => setMode('add_group')}>Добавить группу</button>
             <button className="btn sm ghost" onClick={() => setMode('move')}>Перевести</button>
           </>}
-          <button className="btn sm ghost" onClick={() => setMode('cert')}>Справка</button>
           <button className="btn sm ghost" onClick={() => { setTaskText('Перезвонить'); setTaskDay(todayISO()); setMode('task') }}>Напоминание</button>
           <button className="btn sm ghost" onClick={() => { setEd({ full_name: c.full_name, birth_date: c.birth_date || '', parent_name: f.parent_name || '', phone: f.phone || '', phone2: f.phone2 || '' }); setMode('edit') }}>Данные</button>
           {gone ? <button className="btn sm" onClick={() => act('return', {}, 'Вернули')}>Вернуть</button>
@@ -150,7 +163,6 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
           <div className="acts"><button className="btn sm" onClick={() => act('set_sub_end', { date: subEnd }, 'Срок изменён')}>Сохранить</button><button className="btn sm ghost" onClick={() => setMode(null)}>Отмена</button></div>
         </div>}
         {mode === 'freeze' && <div className="chips">{[7, 14, 21, 30].map((d) => <button key={d} className="chip" onClick={() => act('freeze', { days: d, reason: 'по заявлению' }, `Заморожено на ${d} дн.`)}>{d} дней</button>)}</div>}
-        {mode === 'cert' && <div className="chips">{[[90, '3 месяца'], [180, '6 месяцев'], [365, '12 месяцев']].map(([d, l]) => <button key={d} className="chip" onClick={() => act('cert', { until: addDays(d as number) }, 'Справка обновлена')}>{l as string}</button>)}</div>}
         {mode === 'leave' && <><p className="sub">{c.status === 'trial' ? 'Почему не дошёл после пробного?' : 'Причина ухода'}</p>
           <div className="chips">{(c.status === 'trial' ? LOST : LEFT).map((r) => <button key={r} className="chip" onClick={() => act('leave', { reason: r }, 'Отмечено')}>{r}</button>)}</div></>}
         {mode === 'retrial' && <div className="miss" style={{ border: '1px solid var(--line)', borderRadius: 12 }}>
