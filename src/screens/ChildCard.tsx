@@ -18,7 +18,7 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
   const [why, setWhy] = useState('')
   const [q, setQ] = useState('')
   const [mkDay, setMkDay] = useState(todayISO())
-  const [mkKind, setMkKind] = useState<'makeup' | 'transfer'>('makeup')
+  const [mkKind, setMkKind] = useState<'makeup' | 'transfer' | 'credit'>('makeup')
   const [cancelId, setCancelId] = useState<string | null>(null)
   const [cancelWhy, setCancelWhy] = useState('')
   const [taskText, setTaskText] = useState('Перезвонить')
@@ -94,6 +94,25 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
             <button className="btn sm ghost" onClick={() => setCancelId(null)}>Не отменять</button></div>
         </div>}
       </div>
+      {(data.makeups?.length > 0 || c.makeup_credits > 0) && <div><span className="lbl">Отработки{c.makeup_credits > 0 ? ` · бесплатных доступно: ${c.makeup_credits}` : ''}</span>
+        <div className="hist">{(data.makeups || []).map((m: any) => <div key={m.session_id}>
+          <span>{dm(m.date)} {hm(m.time)} · {m.group}{m.kind === 'credit' ? ' · бесплатная' : m.kind === 'transfer' ? ' · перенос' : ''}</span>
+          {office && <button className="btn sm ghost" style={{ padding: '3px 8px' }} onClick={() => call('cancel_makeup', { p_session: m.session_id, p_child: id }, 'Запись отменена')}>Отменить</button>}
+        </div>)}{(data.makeups || []).length === 0 && <span className="meta">Пока никуда не записан. «Отработка / перенос» → «Бесплатная».</span>}</div></div>}
+      {data.absences?.length > 0 && <div><span className="lbl">Пропуски за 3 месяца</span>
+        <div className="hist">{data.absences.map((a: any) => <div key={a.id}>
+          <span>{dm(a.date)} · {a.group}{a.reason === 'sick' ? ' · болел' : ''}</span>
+          <span style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
+            {a.status === 'refund' || a.status === 'recalc' ? <span className="meta">возвращено</span>
+              : a.status === 'credit' ? <span className="meta">в отработку</span>
+              : !a.charged ? <span className="meta">не списано</span>
+              : office ? <>
+                <button className="btn sm ghost" style={{ padding: '3px 8px' }} onClick={() => call('compensate_absence', { p_attendance: a.id, p_mode: 'refund' }, 'Занятие возвращено на остаток')}>Вернуть</button>
+                <button className="btn sm ghost" style={{ padding: '3px 8px' }} onClick={() => call('compensate_absence', { p_attendance: a.id, p_mode: 'credit' }, 'Начислена бесплатная отработка')}>В отработку</button>
+              </> : <span className="meta">списано</span>}
+          </span></div>)}</div>
+        {office && <p className="note">Принесли справку — «Вернуть» (+1 занятие на остаток) или «В отработку» (бесплатное занятие в любой группе).</p>}
+      </div>}
       {data.tasks.length > 0 && <div className="warnbox">{data.tasks.map((t: any) => <div key={t.id}>{dm(t.due)} · {t.text}</div>)}</div>}
 
       {!gone && <button className="btn" onClick={() => setMode('pay')}>Внести оплату</button>}
@@ -110,7 +129,7 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
             {c.plan_kind === 'count' && <button className="btn sm ghost" onClick={() => { setSubEnd(c.sub_end || todayISO()); setMode('sub_end') }}>Срок абонемента</button>}
             {c.frozen_until && c.frozen_until > todayISO() ? <button className="btn sm ghost" onClick={() => act('unfreeze', {}, 'Заморозка снята')}>Снять заморозку</button>
               : <button className="btn sm ghost" onClick={() => setMode('freeze')}>Заморозить</button>}
-            <button className="btn sm ghost" onClick={() => { setMkDay(todayISO()); setMode('makeup') }}>Отработка / перенос</button>
+            <button className="btn sm ghost" onClick={() => { setMkDay(todayISO()); setMkKind(c.makeup_credits > 0 ? 'credit' : 'makeup'); setMode('makeup') }}>Отработка / перенос</button>
             <button className="btn sm ghost" onClick={() => setMode('add_group')}>Добавить группу</button>
             <button className="btn sm ghost" onClick={() => setMode('move')}>Перевести</button>
           </>}
@@ -163,12 +182,13 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
             <button key={g.id} className="chip" onClick={() => act(mode, { group_id: g.id }, mode === 'move' ? 'Переведён' : 'Группа добавлена')}>{g.branches?.name} · {g.title || hm(g.start_time)}</button>)}</div>
         </>}
         {mode === 'makeup' && <div className="miss" style={{ border: '1px solid var(--line)', borderRadius: 12 }}>
-          <div className="seg" style={{ gridTemplateColumns: '1fr 1fr' }}>
+          <div className="seg">
             <button className="chip" aria-pressed={mkKind === 'makeup'} onClick={() => setMkKind('makeup')}>Отработка</button>
             <button className="chip" aria-pressed={mkKind === 'transfer'} onClick={() => setMkKind('transfer')}>Перенос</button>
+            <button className="chip" aria-pressed={mkKind === 'credit'} disabled={!(c.makeup_credits > 0)} onClick={() => setMkKind('credit')}>Бесплатная{c.makeup_credits > 0 ? ` (${c.makeup_credits})` : ''}</button>
           </div>
           <label htmlFor="md">Дата</label><input id="md" type="date" value={mkDay} min={todayISO()} onChange={(e) => setMkDay(e.target.value)} />
-          <p className="note">Можно в любую группу и любой филиал. Если ребёнок придёт — занятие спишется с остатка как обычное.</p>
+          <p className="note">Можно в любую группу и любой филиал. {mkKind === 'credit' ? 'Бесплатная — в счёт пропуска по справке, с остатка не спишется.' : 'Если ребёнок придёт — занятие спишется с остатка как обычное.'}</p>
           {!sessions.data ? <Loading /> : <div className="chips">
             {sessions.data.filter((s: any) => s.status === 'planned').length === 0 && <span className="meta">В этот день занятий нет</span>}
             {sessions.data.filter((s: any) => s.status === 'planned').map((s: any) =>

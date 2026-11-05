@@ -45,7 +45,7 @@ div.row{cursor:default}
 .kid.frozen{opacity:.6}
 .kidname{border:0;background:none;padding:0;text-align:left;color:inherit;font:inherit;cursor:pointer;min-width:0}
 .marks{grid-column:1/-1;display:grid;grid-template-columns:1fr 1fr;gap:6px}
-.reasons{grid-column:1/-1;display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.reasons{grid-column:1/-1;display:grid;grid-template-columns:repeat(2,1fr);gap:6px}
 .mk{border:1px solid var(--line);background:var(--surface-2);color:var(--fg);font:600 15px var(--body);padding:13px 4px;border-radius:10px;cursor:pointer}
 .reasons .mk{font-size:12.5px;padding:8px 4px;font-weight:500;line-height:1.2}
 .mk[aria-pressed="true"].m-p{background:var(--ok);border-color:var(--ok);color:#fff}

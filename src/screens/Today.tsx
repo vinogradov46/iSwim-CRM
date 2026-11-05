@@ -117,12 +117,14 @@ function Inbox({ data, reload, onOpen }: { data: any; reload: () => void; onOpen
         </div></>}
       {data.sick.length > 0 && <>
         <h2>Болеют · ждём справку</h2>
+        <p className="sub">Занятие уже списано. Если принесли справку — верните занятие на остаток или дайте бесплатную отработку.</p>
         <div className="list">{data.sick.map((s: any) => (
           <div className="miss" key={s.attendance_id}>
             <button className="kidname" onClick={() => setCard(s.child_id)}><span className="name">{s.full_name}</span><br /><span className="meta">{dm(s.date)} · {s.group}</span></button>
             <div className="acts">
-              <button className="btn sm okb" onClick={() => act('resolve_sick', { p_attendance: s.attendance_id, p_decision: 'recalc' }, 'Перерасчёт: не списано')}>Справка есть</button>
-              <button className="btn sm bad" onClick={() => act('resolve_sick', { p_attendance: s.attendance_id, p_decision: 'charged' }, 'Занятие списано')}>Нет, списать</button>
+              <button className="btn sm okb" onClick={() => act('compensate_absence', { p_attendance: s.attendance_id, p_mode: 'refund' }, 'Занятие возвращено на остаток')}>Справка → вернуть занятие</button>
+              <button className="btn sm okb" onClick={() => act('compensate_absence', { p_attendance: s.attendance_id, p_mode: 'credit' }, 'Начислена бесплатная отработка')}>Справка → в отработку</button>
+              <button className="btn sm ghost" onClick={() => act('compensate_absence', { p_attendance: s.attendance_id, p_mode: 'kept' }, 'Оставлено списанным')}>Справки нет</button>
             </div>
           </div>))}
         </div></>}
@@ -166,7 +168,7 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
         const r: any = await rpc('mark_attendance', { p_session: id, p_child: c.child_id, p_mark: m, p_reason: reason ?? null })
         if (m === 'present' && r?.debt) toast(`${c.full_name}: занятие в долг. Примите оплату`)
         else if (m === 'present' && r?.month_unpaid) toast(`${c.full_name}: месяц не оплачен`)
-        else if (reason === 'sick') toast('Не списано. Ушло админу: ждём справку')
+        else if (reason === 'sick') toast('Списано. Если будет справка — администратор возместит')
       }
       reload()
     } catch (e: any) { toast(e.message) }
@@ -214,7 +216,7 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
                   </div>
                   {c.kind !== 'trial' && pressed === 'absent' && (
                     <div className="reasons">
-                      {([['none', 'Без предупр. — списать'], ['warned', 'Предупредили — не списывать'], ['sick', 'Болеет — админу']] as const).map(([v, l]) => (
+                      {([['none', 'Без причины'], ['sick', 'Болеет — будет справка']] as const).map(([v, l]) => (
                         <button key={v} className="mk m-r" aria-pressed={c.absence_reason === v} onClick={() => mark(c, 'absent', v)}>{l}</button>
                       ))}
                     </div>
@@ -226,7 +228,7 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
           {rows.length === 0 && <div className="row meta">В группе пока никого</div>}
         </div>
       )}
-      <p className="note">«Был» и «Пропуск без предупреждения» списывают занятие. «Предупредили» не списывает. «Болеет» уходит админу: со справкой перерасчёт, без справки списывается.</p>
+      <p className="note">«Был» и «Пропуск» списывают занятие. «Болеет — будет справка» тоже списывает, но попадает администратору: когда принесут справку, он вернёт занятие или даст бесплатную отработку. Бесплатная отработка не списывается.</p>
       {pay && <PaySheet childId={pay} me={me} plan={rows.find((r) => r.child_id === pay)?.kind === 'trial' ? 'trial' : undefined} onClose={(ok) => { setPay(null); if (ok) reload() }} />}
       {card && <ChildCard id={card} onClose={() => { setCard(null); reload() }} />}
     </>
