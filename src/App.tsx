@@ -5,13 +5,14 @@ import Today from './screens/Today'
 import Children from './screens/Children'
 import Payments from './screens/Payments'
 import Cash from './screens/Cash'
-import { Salary, Journal } from './screens/Director'
+import { Salary } from './screens/Director'
+import Staff from './screens/Staff'
 
 const ROLE: Record<string, string> = { director: 'Директор', admin: 'Администратор', coach: 'Тренер' }
 const TABS: Record<string, [string, string][]> = {
   coach: [['today', 'Сегодня'], ['kids', 'Дети'], ['cash', 'Касса']],
   admin: [['today', 'Сегодня'], ['kids', 'Дети'], ['pay', 'Оплаты']],
-  director: [['today', 'Сегодня'], ['kids', 'Дети'], ['pay', 'Оплаты'], ['salary', 'Зарплата'], ['log', 'Журнал']],
+  director: [['today', 'Сегодня'], ['kids', 'Дети'], ['pay', 'Оплаты'], ['salary', 'Зарплата'], ['team', 'Команда']],
 }
 /** Вход по телефону: в Supabase это e-mail вида 375291234567@staff.iswim.by */
 const staffEmail = (e164: string) => `${e164.slice(1)}@staff.iswim.by`
@@ -42,7 +43,7 @@ export default function App() {
 
   const tabs = TABS[me.role]
   const body = tab === 'today' ? <Today me={me} /> : tab === 'kids' ? <Children me={me} /> : tab === 'pay' ? <Payments me={me} />
-    : tab === 'cash' ? <Cash me={me} /> : tab === 'salary' ? <Salary /> : <Journal />
+    : tab === 'cash' ? <Cash me={me} /> : tab === 'salary' ? <Salary /> : <Staff />
   return (
     <>
       <div className="app">
