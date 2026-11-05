@@ -1,48 +1,70 @@
 import { useState } from 'react'
-import { rpc, supabase, dm, money, phonePretty, balanceState, todayISO, type Me } from '../lib'
+import { rpc, supabase, dm, hm, money, phonePretty, phoneE164, balanceState, todayISO, type Me } from '../lib'
 import { Sheet, useLoad, Loading, Err, Pill, toast } from '../ui'
 import PaySheet from './PaySheet'
 
 const LEFT = ['Переезд', 'Дорого', 'Неудобное время', 'Не понравилось', 'Болезнь', 'Другое']
-const addDays = (n: number) => { const d = new Date(todayISO() + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
+const LOST = ['Не понравилось', 'Дорого', 'Неудобное время', 'Не отвечает', 'Передумали', 'Другое']
+const PLAN: Record<string, string> = { count: 'абонемент', single: 'разовое', trial: 'пробное', month: 'месяц', annual: 'годовой', opening: 'стартовый остаток' }
+const addDays = (n: number, from = todayISO()) => { const d = new Date(from + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
 
 export default function ChildCard({ id, onClose, me }: { id: string; onClose: () => void; me?: Me }) {
   const { data, error, reload } = useLoad(() => rpc<any>('child_card', { p_child: id }), [id])
   const whoami = useLoad(() => (me ? Promise.resolve([me]) : rpc<Me[]>('whoami')), [])
   const skills = useLoad(async () => (await supabase.from('skill_levels').select('*').order('sort')).data || [], [])
   const [mode, setMode] = useState<string | null>(null)
-  const [notes, setNotes] = useStateInit(data?.child?.notes || '')
+  const [notes, setNotes] = useState('')
   const [bal, setBal] = useState('')
   const [why, setWhy] = useState('')
   const [q, setQ] = useState('')
-  const groups = useLoad(() => (mode === 'move' || mode === 'add_group' || mode === 'makeup' ? rpc<any[]>('sessions_on', { p_date: todayISO() }) : Promise.resolve([])), [mode])
+  const [mkDay, setMkDay] = useState(todayISO())
+  const [mkKind, setMkKind] = useState<'makeup' | 'transfer'>('makeup')
+  const [cancelId, setCancelId] = useState<string | null>(null)
+  const [cancelWhy, setCancelWhy] = useState('')
+  const [taskText, setTaskText] = useState('Перезвонить')
+  const [taskDay, setTaskDay] = useState(todayISO())
+  const [trialDay, setTrialDay] = useState(addDays(1))
+  const [subEnd, setSubEnd] = useState('')
+  const [ed, setEd] = useState<{ full_name: string; birth_date: string; parent_name: string; phone: string; phone2: string } | null>(null)
+  const sessions = useLoad(() => (mode === 'makeup' ? rpc<any[]>('sessions_on', { p_date: mkDay }) : Promise.resolve([])), [mode, mkDay])
   const allGroups = useLoad(async (): Promise<any[]> => (mode === 'move' || mode === 'add_group' ? (await supabase.from('groups').select('id,title,start_time,capacity,branches(name)').eq('active', true).order('start_time')).data || [] : []), [mode])
   const self = whoami.data?.[0]
-  const office = self && self.role !== 'coach'
+  const office = !!self && self.role !== 'coach'
 
   async function act(action: string, args: any = {}, msg = 'Сохранено') {
     try { await rpc('child_action', { p_child: id, p_action: action, p_args: args }); toast(msg); setMode(null); reload() }
     catch (e: any) { toast(e.message) }
   }
+  async function call(fn: string, args: any, msg: string) {
+    try { await rpc(fn, args); toast(msg); setMode(null); reload() } catch (e: any) { toast(e.message) }
+  }
   if (!data) return <Sheet onClose={onClose}>{error ? <Err e={error} /> : <Loading />}<button className="btn ghost" onClick={onClose}>Закрыть</button></Sheet>
   const c = data.child, f = data.family
   const st = c.status === 'active' ? balanceState(c) : { t: { trial: 'Пробное', reserve: 'Резерв', left: 'Ушёл', lost: 'Не дошёл' }[c.status as string] || c.status, c: 'p-mut' }
+  const gone = c.status === 'left' || c.status === 'lost'
 
-  if (mode === 'pay' && self) return <PaySheet childId={id} me={self} onClose={(ok) => { setMode(null); if (ok) reload() }} />
+  if (mode === 'pay' && self) return <PaySheet childId={id} me={self} plan={c.status === 'trial' ? 'trial' : undefined} onClose={(ok) => { setMode(null); if (ok) reload() }} />
   return (
     <Sheet onClose={onClose}>
       <h2>{c.full_name}</h2>
       <div className="chips">
         <Pill c={st.c}>{st.t}</Pill>
-        {c.plan_kind === 'annual' && <Pill c="p-acc">Годовой до {dm(c.annual_until)}</Pill>}
+        {c.plan_kind === 'annual' && c.annual_until && <Pill c="p-acc">Годовой до {dm(c.annual_until)}</Pill>}
         {c.plan_kind === 'count' && c.sub_end && <Pill c="p-mut">Абонемент до {dm(c.sub_end)}</Pill>}
         <Pill c={c.cert_until && c.cert_until >= todayISO() ? 'p-ok' : 'p-bad'}>{c.cert_until ? `Справка до ${dm(c.cert_until)}` : 'Нет справки'}</Pill>
+        {c.birth_date && <Pill c="p-mut">ДР {dm(c.birth_date)}.{c.birth_date.slice(0, 4)}</Pill>}
       </div>
-      <div><span className="lbl">Группы</span>{data.groups.map((g: any) => <div key={g.group_id}>{g.title}{g.primary ? ' · основная' : ''}{g.status === 'reserve' ? ' · резерв' : ''}</div>)}</div>
+      <div><span className="lbl">Группы</span>
+        {data.groups.length === 0 && <div className="meta">Нет групп</div>}
+        {data.groups.map((g: any) => <div key={g.group_id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+          <span className="grow">{g.title}{g.primary ? ' · основная' : ''}{g.status === 'reserve' ? ' · резерв' : ''}</span>
+          {office && !g.primary && <button className="btn sm ghost" onClick={() => act('remove_group', { group_id: g.group_id }, 'Группа убрана')}>Убрать</button>}
+        </div>)}
+      </div>
       <div><span className="lbl">Семья</span><div className="name">{f.parent_name}</div>
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
-          <span className="phone">{phonePretty(f.phone)}{f.phone2 ? `, ${phonePretty(f.phone2)}` : ''}</span>
-          <button className="btn sm ghost" onClick={() => { try { navigator.clipboard.writeText(f.phone).then(() => toast('Телефон скопирован'), () => toast(f.phone)) } catch { toast(f.phone) } }}>Скопировать</button>
+          <span className="phone" style={{ userSelect: 'text' }}>{phonePretty(f.phone)}{f.phone2 ? `, ${phonePretty(f.phone2)}` : ''}</span>
+          <button className="btn sm ghost" onClick={() => { navigator.clipboard?.writeText(f.phone).then(() => toast('Телефон скопирован'), () => toast(f.phone)) }}>Скопировать</button>
           <a className="btn sm ghost" href={`tel:${f.phone.replace(/[^\d+]/g, '')}`}>Позвонить</a>
         </div>
         {data.siblings.length > 0 && <div className="meta">Дети в семье: {data.siblings.map((s: any) => s.full_name).join(', ')}</div>}
@@ -50,7 +72,7 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
       <div><span className="lbl">Особенности</span>
         {mode === 'notes' ? <>
           <input value={notes} onChange={(e) => setNotes(e.target.value)} placeholder="Боится нырять, аллергия…" />
-          <div className="acts" style={{ marginTop: 6 }}><button className="btn sm" onClick={async () => { try { await rpc('update_child_notes', { p_child: id, p_notes: notes }); toast('Сохранено'); setMode(null); reload() } catch (e: any) { toast(e.message) } }}>Сохранить</button><button className="btn sm ghost" onClick={() => setMode(null)}>Отмена</button></div>
+          <div className="acts" style={{ marginTop: 6 }}><button className="btn sm" onClick={() => call('update_child_notes', { p_child: id, p_notes: notes }, 'Сохранено')}>Сохранить</button><button className="btn sm ghost" onClick={() => setMode(null)}>Отмена</button></div>
         </> : <div style={{ display: 'flex', gap: 8 }}><span className="grow" style={c.notes ? { color: 'var(--warn)', fontWeight: 600 } : {}}>{c.notes || 'Ничего не указано'}</span><button className="btn sm ghost" onClick={() => { setNotes(c.notes || ''); setMode('notes') }}>Изменить</button></div>}
       </div>
       {skills.data && skills.data.length > 0 && <div><span className="lbl">Навыки · {data.skills.length} из {skills.data.length}</span>
@@ -58,47 +80,105 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
           <button key={s.id} className="skill" aria-pressed={data.skills.includes(s.id)} onClick={async () => { try { await rpc('toggle_skill', { p_child: id, p_skill: s.id }); reload() } catch (e: any) { toast(e.message) } }}>
             <span className="box">{data.skills.includes(s.id) ? '✓' : ''}</span>{s.name}</button>))}</div></div>}
       <div><span className="lbl">{office ? 'Оплаты' : 'Оплаты, принятые вами'}</span>
-        <div className="hist">{data.payments.length ? data.payments.map((p: any) => <div key={p.id}><span>{dm(p.paid_at.slice(0, 10))} · {p.plan_type === 'count' ? `${p.lessons} зан.` : p.plan_type}{p.cancelled ? ' (отменена)' : ''}</span><span>{money(p.amount)} · {p.method === 'cash' ? 'касса' : 'EPOS'}</span></div>) : <span className="meta">Нет</span>}</div></div>
-      {data.tasks.length > 0 && <div className="warnbox">{data.tasks.map((t: any) => <div key={t.id}>{t.text}</div>)}</div>}
+        <div className="hist">{data.payments.length ? data.payments.map((p: any) => <div key={p.id}>
+          <span>{dm(p.paid_at.slice(0, 10))} · {p.plan_type === 'count' ? `${p.lessons} зан.` : PLAN[p.plan_type] || p.plan_type}{p.cancelled ? ' · отменена' : ''}</span>
+          <span style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
+            <span style={p.cancelled ? { textDecoration: 'line-through' } : {}}>{money(p.amount)} · {p.method === 'cash' ? 'касса' : 'EPOS'}</span>
+            {office && !p.cancelled && <button className="btn sm ghost" style={{ padding: '3px 8px' }} onClick={() => { setCancelId(p.id); setCancelWhy('') }}>Отменить</button>}
+          </span></div>) : <span className="meta">Нет</span>}</div>
+        {cancelId && <div className="miss" style={{ border: '1px solid var(--line)', borderRadius: 12, marginTop: 8 }}>
+          <label htmlFor="cw">Причина отмены оплаты</label>
+          <input id="cw" value={cancelWhy} onChange={(e) => setCancelWhy(e.target.value)} placeholder="ошибка, внесли не тому, возврат…" />
+          <p className="note">Занятия, которые дала эта оплата, снимутся с остатка. Если это EPOS — оплата вернётся во «Входящие».</p>
+          <div className="acts"><button className="btn sm bad" onClick={async () => { if (!cancelWhy.trim()) return toast('Укажите причину'); await call('cancel_payment', { p_payment: cancelId, p_reason: cancelWhy }, 'Оплата отменена'); setCancelId(null) }}>Отменить оплату</button>
+            <button className="btn sm ghost" onClick={() => setCancelId(null)}>Не отменять</button></div>
+        </div>}
+      </div>
+      {data.tasks.length > 0 && <div className="warnbox">{data.tasks.map((t: any) => <div key={t.id}>{dm(t.due)} · {t.text}</div>)}</div>}
 
-      {/* действия */}
-      {c.status !== 'left' && c.status !== 'lost' && <button className="btn" onClick={() => setMode('pay')}>Внести оплату</button>}
+      {!gone && <button className="btn" onClick={() => setMode('pay')}>Внести оплату</button>}
       {office && <>
-        {mode === 'balance' ? <div className="miss" style={{ border: '1px solid var(--line)', borderRadius: 12 }}>
+        <div className="acts">
+          {c.status === 'trial' && <>
+            <button className="btn sm" onClick={() => setMode('retrial')}>Перенести пробное</button>
+            <button className="btn sm" onClick={() => act('to_group', {}, 'Переведён в группу')}>В группу</button>
+          </>}
+          {c.status === 'reserve' && <button className="btn sm" onClick={() => act('to_group', {}, 'Переведён в группу')}>Из резерва в группу</button>}
+          {c.status === 'active' && <button className="btn sm ghost" onClick={() => act('to_reserve', {}, 'Переведён в резерв')}>В резерв</button>}
+          {!gone && <>
+            <button className="btn sm ghost" onClick={() => { setBal(String(c.lessons_left)); setWhy(''); setMode('balance') }}>Исправить остаток</button>
+            {c.plan_kind === 'count' && <button className="btn sm ghost" onClick={() => { setSubEnd(c.sub_end || todayISO()); setMode('sub_end') }}>Срок абонемента</button>}
+            {c.frozen_until && c.frozen_until > todayISO() ? <button className="btn sm ghost" onClick={() => act('unfreeze', {}, 'Заморозка снята')}>Снять заморозку</button>
+              : <button className="btn sm ghost" onClick={() => setMode('freeze')}>Заморозить</button>}
+            <button className="btn sm ghost" onClick={() => { setMkDay(todayISO()); setMode('makeup') }}>Отработка / перенос</button>
+            <button className="btn sm ghost" onClick={() => setMode('add_group')}>Добавить группу</button>
+            <button className="btn sm ghost" onClick={() => setMode('move')}>Перевести</button>
+          </>}
+          <button className="btn sm ghost" onClick={() => setMode('cert')}>Справка</button>
+          <button className="btn sm ghost" onClick={() => { setTaskText('Перезвонить'); setTaskDay(todayISO()); setMode('task') }}>Напоминание</button>
+          <button className="btn sm ghost" onClick={() => { setEd({ full_name: c.full_name, birth_date: c.birth_date || '', parent_name: f.parent_name || '', phone: f.phone || '', phone2: f.phone2 || '' }); setMode('edit') }}>Данные</button>
+          {gone ? <button className="btn sm" onClick={() => act('return', {}, 'Вернули')}>Вернуть</button>
+            : <button className="btn sm bad" onClick={() => setMode('leave')}>{c.status === 'trial' ? 'Не дошёл' : 'Ушёл'}</button>}
+        </div>
+        {mode === 'balance' && <div className="miss" style={{ border: '1px solid var(--line)', borderRadius: 12 }}>
           <label htmlFor="bal">Новый остаток занятий (сейчас {c.lessons_left})</label><input id="bal" inputMode="numeric" value={bal} onChange={(e) => setBal(e.target.value)} />
           <label htmlFor="why">Причина</label><input id="why" value={why} onChange={(e) => setWhy(e.target.value)} placeholder="сверка с тренером, перерасчёт…" />
-          <div className="acts"><button className="btn sm" onClick={() => { const v = parseInt(bal, 10); if (isNaN(v) || !why.trim()) return toast('Укажите число и причину'); act('set_balance', { lessons: v, reason: why, sub_start: todayISO(), sub_end: addDays(30) }, 'Остаток изменён') }}>Сохранить</button><button className="btn sm ghost" onClick={() => setMode(null)}>Отмена</button></div>
-        </div> : null}
-        <div className="acts">
-          <button className="btn sm ghost" onClick={() => { setBal(String(c.lessons_left)); setWhy(''); setMode('balance') }}>Исправить остаток</button>
-          {c.frozen_until && c.frozen_until > todayISO() ? <button className="btn sm ghost" onClick={() => act('unfreeze', {}, 'Заморозка снята')}>Снять заморозку</button>
-            : <button className="btn sm ghost" onClick={() => setMode('freeze')}>Заморозить</button>}
-          <button className="btn sm ghost" onClick={() => setMode('makeup')}>Отработка / перенос</button>
-          <button className="btn sm ghost" onClick={() => setMode('add_group')}>Добавить группу</button>
-          <button className="btn sm ghost" onClick={() => setMode('move')}>Перевести</button>
-          <button className="btn sm ghost" onClick={() => setMode('cert')}>Справка</button>
-          {c.status === 'reserve' && <button className="btn sm" onClick={() => act('to_group', {}, 'Переведён в группу')}>Из резерва в группу</button>}
-          {(c.status === 'left' || c.status === 'lost') ? <button className="btn sm" onClick={() => act('return', {}, 'Вернули')}>Вернуть</button>
-            : <button className="btn sm bad" onClick={() => setMode('leave')}>Ушёл</button>}
-        </div>
+          <p className="note">Срок абонемента не меняется. Чтобы продлить срок — «Срок абонемента».</p>
+          <div className="acts"><button className="btn sm" onClick={() => { const v = parseInt(bal, 10); if (isNaN(v) || !why.trim()) return toast('Укажите число и причину'); act('set_balance', c.sub_end ? { lessons: v, reason: why } : { lessons: v, reason: why, sub_start: todayISO(), sub_end: addDays(30) }, 'Остаток изменён') }}>Сохранить</button><button className="btn sm ghost" onClick={() => setMode(null)}>Отмена</button></div>
+        </div>}
+        {mode === 'sub_end' && <div className="miss" style={{ border: '1px solid var(--line)', borderRadius: 12 }}>
+          <label htmlFor="se">Абонемент действует до</label><input id="se" type="date" value={subEnd} onChange={(e) => setSubEnd(e.target.value)} />
+          <div className="acts"><button className="btn sm" onClick={() => act('set_sub_end', { date: subEnd }, 'Срок изменён')}>Сохранить</button><button className="btn sm ghost" onClick={() => setMode(null)}>Отмена</button></div>
+        </div>}
         {mode === 'freeze' && <div className="chips">{[7, 14, 21, 30].map((d) => <button key={d} className="chip" onClick={() => act('freeze', { days: d, reason: 'по заявлению' }, `Заморожено на ${d} дн.`)}>{d} дней</button>)}</div>}
         {mode === 'cert' && <div className="chips">{[[90, '3 месяца'], [180, '6 месяцев'], [365, '12 месяцев']].map(([d, l]) => <button key={d} className="chip" onClick={() => act('cert', { until: addDays(d as number) }, 'Справка обновлена')}>{l as string}</button>)}</div>}
-        {mode === 'leave' && <div className="chips">{LEFT.map((r) => <button key={r} className="chip" onClick={() => act('leave', { reason: r }, 'Отмечено')}>{r}</button>)}</div>}
+        {mode === 'leave' && <><p className="sub">{c.status === 'trial' ? 'Почему не дошёл после пробного?' : 'Причина ухода'}</p>
+          <div className="chips">{(c.status === 'trial' ? LOST : LEFT).map((r) => <button key={r} className="chip" onClick={() => act('leave', { reason: r }, 'Отмечено')}>{r}</button>)}</div></>}
+        {mode === 'retrial' && <div className="miss" style={{ border: '1px solid var(--line)', borderRadius: 12 }}>
+          <label htmlFor="td">Новая дата пробного</label><input id="td" type="date" value={trialDay} min={todayISO()} onChange={(e) => setTrialDay(e.target.value)} />
+          <div className="acts"><button className="btn sm" onClick={() => act('retrial', { date: trialDay }, 'Пробное перенесено')}>Сохранить</button><button className="btn sm ghost" onClick={() => setMode(null)}>Отмена</button></div>
+        </div>}
+        {mode === 'task' && <div className="miss" style={{ border: '1px solid var(--line)', borderRadius: 12 }}>
+          <label htmlFor="tt">Что сделать</label><input id="tt" value={taskText} onChange={(e) => setTaskText(e.target.value)} />
+          <label htmlFor="tdd">Когда напомнить</label><input id="tdd" type="date" value={taskDay} min={todayISO()} onChange={(e) => setTaskDay(e.target.value)} />
+          <div className="acts"><button className="btn sm" onClick={() => act('task', { text: taskText, date: taskDay }, 'Напоминание создано')}>Сохранить</button><button className="btn sm ghost" onClick={() => setMode(null)}>Отмена</button></div>
+        </div>}
+        {mode === 'edit' && ed && <div className="miss" style={{ border: '1px solid var(--line)', borderRadius: 12 }}>
+          <label htmlFor="en">Фамилия и имя ребёнка</label><input id="en" value={ed.full_name} onChange={(e) => setEd({ ...ed, full_name: e.target.value })} />
+          <label htmlFor="eb">Дата рождения</label><input id="eb" type="date" value={ed.birth_date} onChange={(e) => setEd({ ...ed, birth_date: e.target.value })} />
+          <label htmlFor="ep">Родитель</label><input id="ep" value={ed.parent_name} onChange={(e) => setEd({ ...ed, parent_name: e.target.value })} />
+          <label htmlFor="eph">Телефон</label><input id="eph" inputMode="tel" value={ed.phone} onChange={(e) => setEd({ ...ed, phone: e.target.value })} />
+          <label htmlFor="eph2">Второй телефон</label><input id="eph2" inputMode="tel" value={ed.phone2} onChange={(e) => setEd({ ...ed, phone2: e.target.value })} placeholder="необязательно" />
+          {data.siblings.length > 0 && <p className="note">Родитель и телефоны общие для всей семьи: поменяются и у {data.siblings.map((s: any) => s.full_name).join(', ')}.</p>}
+          <div className="acts"><button className="btn sm" onClick={() => {
+            if (!phoneE164(ed.phone)) return toast('Телефон: +375 и 9 цифр')
+            if (ed.phone2.trim() && ed.phone2.trim() !== '+375' && !phoneE164(ed.phone2)) return toast('Второй телефон: +375 и 9 цифр')
+            act('edit', { full_name: ed.full_name, birth_date: ed.birth_date, parent_name: ed.parent_name, phone: ed.phone, phone2: ed.phone2.trim() === '+375' ? '' : ed.phone2 }, 'Данные сохранены')
+          }}>Сохранить</button><button className="btn sm ghost" onClick={() => setMode(null)}>Отмена</button></div>
+        </div>}
         {(mode === 'move' || mode === 'add_group') && <>
+          <p className="sub">{mode === 'move' ? 'Куда перевести (основная группа меняется):' : 'Ещё одна группа — остаток занятий общий:'}</p>
           <input placeholder="Найти группу: филиал или время" value={q} onChange={(e) => setQ(e.target.value)} />
-          <div className="chips">{(allGroups.data || []).filter((g: any) => `${g.branches?.name} ${g.title}`.toLowerCase().includes(q.toLowerCase())).slice(0, 20).map((g: any) =>
-            <button key={g.id} className="chip" onClick={() => act(mode, { group_id: g.id }, mode === 'move' ? 'Переведён' : 'Группа добавлена')}>{g.branches?.name} · {g.title}</button>)}</div>
+          <div className="chips">{(allGroups.data || []).filter((g: any) => `${g.branches?.name} ${g.title} ${hm(g.start_time)}`.toLowerCase().includes(q.toLowerCase())).slice(0, 30).map((g: any) =>
+            <button key={g.id} className="chip" onClick={() => act(mode, { group_id: g.id }, mode === 'move' ? 'Переведён' : 'Группа добавлена')}>{g.branches?.name} · {g.title || hm(g.start_time)}</button>)}</div>
         </>}
-        {mode === 'makeup' && <>
-          <p className="sub">Занятия сегодня. Занятие спишется с остатка как обычное.</p>
-          <div className="chips">{(groups.data || []).filter((s: any) => s.status === 'planned').map((s: any) =>
-            <button key={s.session_id} className="chip" onClick={async () => { try { await rpc('book_makeup', { p_session: s.session_id, p_child: id, p_kind: 'makeup' }); toast('Записан на отработку'); setMode(null); reload() } catch (e: any) { toast(e.message) } }}>{s.branch} · {s.title}</button>)}</div>
-        </>}
+        {mode === 'makeup' && <div className="miss" style={{ border: '1px solid var(--line)', borderRadius: 12 }}>
+          <div className="seg" style={{ gridTemplateColumns: '1fr 1fr' }}>
+            <button className="chip" aria-pressed={mkKind === 'makeup'} onClick={() => setMkKind('makeup')}>Отработка</button>
+            <button className="chip" aria-pressed={mkKind === 'transfer'} onClick={() => setMkKind('transfer')}>Перенос</button>
+          </div>
+          <label htmlFor="md">Дата</label><input id="md" type="date" value={mkDay} min={todayISO()} onChange={(e) => setMkDay(e.target.value)} />
+          <p className="note">Можно в любую группу и любой филиал. Если ребёнок придёт — занятие спишется с остатка как обычное.</p>
+          {!sessions.data ? <Loading /> : <div className="chips">
+            {sessions.data.filter((s: any) => s.status === 'planned').length === 0 && <span className="meta">В этот день занятий нет</span>}
+            {sessions.data.filter((s: any) => s.status === 'planned').map((s: any) =>
+              <button key={s.session_id} className="chip" onClick={() => call('book_makeup', { p_session: s.session_id, p_child: id, p_kind: mkKind }, mkKind === 'transfer' ? 'Перенос записан' : 'Записан на отработку')}>{hm(s.start_time)} {s.branch} · {s.title}</button>)}
+          </div>}
+          <button className="btn sm ghost" onClick={() => setMode(null)}>Отмена</button>
+        </div>}
       </>}
       <div><span className="lbl">История</span><div className="hist">{data.history.map((h: any, i: number) => <div key={i}><span>{dm(h.at.slice(0, 10))}</span><span>{h.text}</span></div>)}</div></div>
       <button className="btn ghost" onClick={onClose}>Закрыть</button>
     </Sheet>
   )
 }
-
-function useStateInit<T>(v: T) { return useState<T>(v) }

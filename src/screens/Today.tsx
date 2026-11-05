@@ -9,16 +9,16 @@ type Sess = { session_id: string; branch: string; title: string; start_time: str
 
 export default function Today({ me }: { me: Me }) {
   const [day, setDay] = useState(todayISO())
-  const [open, setOpen] = useState<string | null>(null)
+  const [open, setOpen] = useState<{ id: string; day: string } | null>(null)
   const { data, error, reload } = useLoad(() => rpc<Sess[]>('sessions_on', { p_date: day }), [day])
   const office = me.role !== 'coach'
   const inbox = useLoad(() => (office ? rpc<any>('office_inbox') : Promise.resolve(null)), [office])
 
-  if (open) return <Session id={open} me={me} onBack={() => { setOpen(null); reload(); inbox.reload() }} />
+  if (open) return <Session id={open.id} day={open.day} me={me} onBack={() => { setOpen(null); reload(); inbox.reload() }} />
   const late = (data || []).filter((s) => s.status === 'planned' && s.ended && s.marked < s.expected)
   return (
     <>
-      {office && <Inbox data={inbox.data} reload={() => { inbox.reload(); reload() }} />}
+      {office && <Inbox data={inbox.data} reload={() => { inbox.reload(); reload() }} onOpen={(id, d) => setOpen({ id, day: d })} />}
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <h2 className="grow" style={{ textTransform: 'capitalize' }}>{dateRu(day)}</h2>
         <input type="date" value={day} onChange={(e) => setDay(e.target.value)} style={{ width: 'auto' }} aria-label="Дата" />
@@ -32,7 +32,7 @@ export default function Today({ me }: { me: Me }) {
             const isLate = late.includes(s)
             return (
               <div className="miss" key={s.session_id}>
-                <button className="row" style={{ padding: 0 }} onClick={() => s.status === 'planned' && setOpen(s.session_id)}>
+                <button className="row" style={{ padding: 0 }} onClick={() => s.status === 'planned' && setOpen({ id: s.session_id, day })}>
                   <span className="time">{hm(s.start_time)}</span>
                   <span className="grow"><span className="name">{s.branch} · {s.title}</span><br />
                     <span className="meta">{s.substitute_name ? `${s.substitute_name} (замена за ${s.coach_name})` : s.coach_name || 'тренер не назначен'}
@@ -91,7 +91,7 @@ function SessionActions({ s, reload }: { s: Sess; reload: () => void }) {
   )
 }
 
-function Inbox({ data, reload }: { data: any; reload: () => void }) {
+function Inbox({ data, reload, onOpen }: { data: any; reload: () => void; onOpen: (id: string, day: string) => void }) {
   const [card, setCard] = useState<string | null>(null)
   if (!data) return null
   async function act(fn: string, args: any, msg: string) {
@@ -105,6 +105,16 @@ function Inbox({ data, reload }: { data: any; reload: () => void }) {
         <div className={`stat ${data.sick.length ? 'hot' : ''}`}><b>{data.sick.length}</b><small>ждём справку</small></div>
         <div className={`stat ${data.tasks.length ? 'hot' : ''}`}><b>{data.tasks.length}</b><small>задач</small></div>
       </div>
+      {data.unmarked?.length > 0 && <>
+        <h2>Не отмечены занятия · {data.unmarked.length}</h2>
+        <p className="sub">Без отметок тренеру не начислится зарплата за занятие. Откройте и отметьте.</p>
+        <div className="list">{data.unmarked.map((u: any) => (
+          <button className="row" key={u.session_id} onClick={() => onOpen(u.session_id, u.date)}>
+            <span className="time">{dm(u.date)}</span>
+            <span className="grow"><span className="name">{u.group}</span><br /><span className="meta">{hm(u.time)} · {u.coach || 'без тренера'}</span></span>
+            <Pill c="p-bad">Отметить</Pill>
+          </button>))}
+        </div></>}
       {data.sick.length > 0 && <>
         <h2>Болеют · ждём справку</h2>
         <div className="list">{data.sick.map((s: any) => (
@@ -139,8 +149,8 @@ type R = { child_id: string; full_name: string; phone: string; notes: string | n
   plan_kind: string; lessons_left: number; sub_end: string | null; frozen_until: string | null; paid_month: string | null; cert_until: string | null; birth_date: string | null;
   mark: string | null; absence_reason: string | null; sick_status: string | null }
 
-function Session({ id, me, onBack }: { id: string; me: Me; onBack: () => void }) {
-  const sess = useLoad(() => rpc<Sess[]>('sessions_on', { p_date: todayISO() }).then((l) => l.find((x) => x.session_id === id) || null), [id])
+function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onBack: () => void }) {
+  const sess = useLoad(() => rpc<Sess[]>('sessions_on', { p_date: day }).then((l) => l.find((x) => x.session_id === id) || null), [id, day])
   const { data, error, reload } = useLoad(() => rpc<R[]>('session_roster', { p_session: id }), [id])
   const [pay, setPay] = useState<string | null>(null)
   const [card, setCard] = useState<string | null>(null)
@@ -167,13 +177,13 @@ function Session({ id, me, onBack }: { id: string; me: Me; onBack: () => void })
     catch (e: any) { toast(e.message) }
   }
   const rows = data || []
-  const unmarked = rows.filter((c) => c.kind !== 'trial' && !c.mark && !(c.frozen_until && c.frozen_until > todayISO())).length
+  const unmarked = rows.filter((c) => c.kind === 'group' && !c.mark && !(c.frozen_until && c.frozen_until > day)).length
   return (
     <>
       <button className="back" onClick={onBack}>← Назад</button>
-      {s && <div><h2>{s.branch} · {s.title}</h2><p className="sub">{s.substitute_name ? `Замена: ${s.substitute_name}` : s.coach_name}</p></div>}
-      {me.role !== 'coach' && <div className="warnbox">Вы правите отметки тренера. Каждое изменение попадёт в журнал</div>}
-      {!canMark && s && <div className="note">Отмечать можно только в день занятия. Позже исправляет администратор.</div>}
+      {s && <div><h2>{s.branch} · {s.title}</h2><p className="sub" style={{ textTransform: 'capitalize' }}>{dateRu(day)} · {hm(s.start_time)} · {s.substitute_name ? `замена: ${s.substitute_name}` : s.coach_name}</p></div>}
+      {me.role !== 'coach' && canMark && <div className="warnbox">Вы правите отметки тренера. Каждое изменение попадёт в журнал</div>}
+      {!canMark && s && <div className="note">{day > todayISO() ? 'Отмечать можно в день занятия.' : 'Отмечать можно только в день занятия. Позже исправляет администратор.'}</div>}
       <Err e={error} />
       {canMark && unmarked > 0 && <button className="btn okb" onClick={allHere}>Все были ({unmarked}), потом исправить отсутствующих</button>}
       {!data ? <Loading /> : (
@@ -183,8 +193,8 @@ function Session({ id, me, onBack }: { id: string; me: Me; onBack: () => void })
               ? (c.trial_result === 'came' ? { t: c.trial_paid ? 'Был на пробном' : 'Был, не оплатил', c: c.trial_paid ? 'p-ok' : 'p-warn' } : c.trial_result === 'noshow' ? { t: 'Не пришёл', c: 'p-bad' } : { t: c.trial_paid ? 'Пробное оплачено' : 'Пробное', c: c.trial_paid ? 'p-acc' : 'p-warn' })
               : balanceState(c)
             const pressed = c.kind === 'trial' ? (c.trial_result === 'came' ? 'present' : c.trial_result === 'noshow' ? 'absent' : null) : c.mark
-            const frozen = !!(c.frozen_until && c.frozen_until > todayISO())
-            const bday = c.birth_date && c.birth_date.slice(5) === todayISO().slice(5)
+            const frozen = !!(c.frozen_until && c.frozen_until > day)
+            const bday = c.birth_date && c.birth_date.slice(5) === day.slice(5)
             return (
               <div className={`kid${frozen ? ' frozen' : ''}`} key={c.child_id + c.kind}>
                 <button className="kidname" onClick={() => setCard(c.child_id)}>
@@ -217,7 +227,7 @@ function Session({ id, me, onBack }: { id: string; me: Me; onBack: () => void })
         </div>
       )}
       <p className="note">«Был» и «Пропуск без предупреждения» списывают занятие. «Предупредили» не списывает. «Болеет» уходит админу: со справкой перерасчёт, без справки списывается.</p>
-      {pay && <PaySheet childId={pay} me={me} onClose={(ok) => { setPay(null); if (ok) reload() }} />}
+      {pay && <PaySheet childId={pay} me={me} plan={rows.find((r) => r.child_id === pay)?.kind === 'trial' ? 'trial' : undefined} onClose={(ok) => { setPay(null); if (ok) reload() }} />}
       {card && <ChildCard id={card} onClose={() => { setCard(null); reload() }} />}
     </>
   )

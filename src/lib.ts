@@ -57,7 +57,7 @@ export function plural(n: number, a: string, b: string, c: string) {
 export const lw = (n: number) => plural(n, 'занятие', 'занятия', 'занятий')
 
 /** Цены: 1 занятие 45, 2–7 по 37,50, от 8 по 33,75 */
-export const PRICE = { trial: 25, single: 45, p2: 37.5, p8: 33.75, discount: 10 }
+export const PRICE = { trial: 25, single: 45, p2: 37.5, p8: 33.75, discount: 10, annual: 121 }
 export const perLesson = (n: number) => (n >= 8 ? PRICE.p8 : n >= 2 ? PRICE.p2 : PRICE.single)
 export const priceFor = (n: number, fam = false) => {
   const b = Math.round(n * perLesson(n) * 100) / 100

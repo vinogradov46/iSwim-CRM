@@ -5,30 +5,32 @@ import { Sheet, Err, toast } from '../ui'
 type Plan = 'count' | 'single' | 'trial' | 'month' | 'annual'
 
 /** Оплата: тренер — наличные в кассу, офис — EPOS (или из входящей оплаты) */
-export default function PaySheet({ childId, me, onClose, incoming }: {
-  childId: string; me: Me; onClose: (ok: boolean) => void
+export default function PaySheet({ childId, me, onClose, incoming, plan: initPlan }: {
+  childId: string; me: Me; onClose: (ok: boolean) => void; plan?: Plan
   incoming?: { id: string; amount: number; payer: string | null; lessons: number | null }
 }) {
-  const [plan, setPlan] = useState<Plan>('count')
+  const [plan, setPlan] = useState<Plan>(initPlan ?? 'count')
   const [n, setN] = useState(incoming?.lessons || 8)
   const [fam, setFam] = useState(false)
-  const [amt, setAmt] = useState<string>(incoming ? String(incoming.amount) : String(priceFor(8)))
+  const [amt, setAmt] = useState<string>(incoming ? String(incoming.amount) : initPlan === 'trial' ? String(PRICE.trial) : String(priceFor(8)))
   const [method, setMethod] = useState<'cash' | 'epos'>(incoming ? 'epos' : me.role === 'coach' ? 'cash' : 'epos')
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [confirmOdd, setConfirmOdd] = useState(false)
 
-  const suggest = (p: Plan, k: number, f: boolean) => p === 'trial' ? PRICE.trial : p === 'single' ? PRICE.single : p === 'count' ? priceFor(k, f) : 0
+  const suggest = (p: Plan, k: number, f: boolean) => p === 'trial' ? PRICE.trial : p === 'single' ? PRICE.single : p === 'count' ? priceFor(k, f) : p === 'annual' ? PRICE.annual : 0
   function upd(p: Plan, k: number, f: boolean) {
-    setPlan(p); setN(k); setFam(f)
-    if (!incoming) setAmt(p === 'month' || p === 'annual' ? '' : String(suggest(p, k, f)))
+    setPlan(p); setN(k); setFam(f); setConfirmOdd(false); setErr(null)
+    if (!incoming) setAmt(p === 'month' ? '' : String(suggest(p, k, f)))
   }
   const calc = plan === 'count' ? `${n} × ${money(perLesson(n))} = ${money(priceFor(n))} BYN${fam ? ` − 10% = ${money(priceFor(n, true))} BYN` : ''}`
-    : plan === 'trial' ? `Пробное: ${PRICE.trial} BYN` : plan === 'single' ? `Разовое: ${PRICE.single} BYN` : plan === 'annual' ? 'Годовой: 8 занятий каждый месяц' : 'Месяц: сумма вручную'
+    : plan === 'trial' ? `Пробное: ${PRICE.trial} BYN` : plan === 'single' ? `Разовое: ${PRICE.single} BYN` : plan === 'annual' ? `Годовой: ${PRICE.annual} BYN в месяц, 8 занятий каждый месяц` : 'Месяц: сумма вручную'
   const a = parseFloat(amt.replace(',', '.'))
   const mismatch = incoming && plan === 'count' && Math.abs(priceFor(n, fam) - a) > 0.5
 
   async function save() {
     if (!(a > 0)) return setErr('Введите сумму больше нуля')
+    if (plan === 'count' && !incoming && Math.abs(priceFor(n, fam) - a) > 0.5 && !confirmOdd) { setConfirmOdd(true); return setErr(`Сумма ${money(a)} не совпадает с прайсом (${money(priceFor(n, fam))}). Нажмите «Записать» ещё раз, если всё верно`) }
     setBusy(true); setErr(null)
     try {
       await rpc('record_payment', { p_child: childId, p_amount: a, p_method: method, p_plan_type: plan,
@@ -55,7 +57,7 @@ export default function PaySheet({ childId, me, onClose, incoming }: {
         <p className="sub" style={{ marginTop: 6 }}>Абонемент действует 30 дней</p>
       </div>}
       <div className="calc">{calc}</div>
-      <div><label htmlFor="amt">{incoming ? 'Пришло, BYN' : 'К оплате, BYN'}</label><input id="amt" inputMode="decimal" value={amt} readOnly={!!incoming} onChange={(e) => setAmt(e.target.value)} /></div>
+      <div><label htmlFor="amt">{incoming ? 'Пришло, BYN' : 'К оплате, BYN'}</label><input id="amt" inputMode="decimal" value={amt} readOnly={!!incoming} onChange={(e) => { setAmt(e.target.value); setConfirmOdd(false) }} /></div>
       {mismatch && <div className="warnbox">Пришло {money(a)}, а по прайсу {money(priceFor(n, fam))}. Проверьте, что оплачено.</div>}
       <Err e={err} />
       <button className="btn" disabled={busy} onClick={save}>{busy ? 'Сохраняем…' : `Записать · ${method === 'cash' ? 'касса' : 'EPOS'}`}</button>

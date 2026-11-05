@@ -2,19 +2,24 @@ import { useState } from 'react'
 import { rpc, supabase, phonePretty, phoneE164, balanceState, hm, todayISO, type Me } from '../lib'
 import { useLoad, Loading, Err, Pill, Sheet, Chips, toast } from '../ui'
 import ChildCard from './ChildCard'
+import Groups from './Groups'
 
-const STATUS: [string, string][] = [['active', 'Занимаются'], ['trial', 'Пробные'], ['reserve', 'Резерв'], ['left', 'Ушли']]
+const STATUS: [string, string][] = [['active', 'Занимаются'], ['trial', 'Пробные'], ['reserve', 'Резерв'], ['left', 'Ушли'], ['lost', 'Не дошли']]
 
 export default function Children({ me }: { me: Me }) {
   const [q, setQ] = useState('')
   const [status, setStatus] = useState<string>('active')
   const [card, setCard] = useState<string | null>(null)
   const [add, setAdd] = useState(false)
+  const [groups, setGroups] = useState(false)
   const { data, error, reload } = useLoad(() => rpc<any[]>('search_children', { p_q: q, p_status: status, p_limit: 80 }), [q, status])
   const office = me.role !== 'coach'
+  if (groups) return <Groups me={me} onBack={() => { setGroups(false); reload() }} />
   return (
     <>
-      {office && <button className="btn" onClick={() => setAdd(true)}>+ Записать ребёнка</button>}
+      {office && <div style={{ display: 'grid', gridTemplateColumns: '2fr 1fr', gap: 8 }}>
+        <button className="btn" onClick={() => setAdd(true)}>+ Записать ребёнка</button>
+        <button className="btn ghost" onClick={() => setGroups(true)}>Группы</button></div>}
       <input placeholder="Ребёнок, родитель или телефон" value={q} onChange={(e) => setQ(e.target.value)} />
       <Chips options={STATUS} value={status} onChange={setStatus} />
       <Err e={error} />
@@ -48,10 +53,14 @@ function Enroll({ onClose }: { onClose: (ok: boolean) => void }) {
   const [err, setErr] = useState<string | null>(null), [busy, setBusy] = useState(false)
   const gs = (groups.data || []) as any[]
   const branches = [...new Map(gs.map((g) => [g.branch_id, g.branches?.name])).entries()]
+  const ov = useLoad(() => rpc<any[]>('groups_overview'), [])
+  const load = (id: string) => ov.data?.find((x: any) => x.id === id)
+  const full = (id: string) => { const x = load(id); return !!x && x.active_kids >= x.capacity }
   async function save() {
     if (!name.trim().includes(' ')) return setErr('Фамилия и имя ребёнка через пробел')
     if (!phoneE164(phone)) return setErr('Телефон: +375 и 9 цифр')
     if (!gid) return setErr('Выберите группу')
+    if (mode === 'group' && full(gid)) return setErr('Группа заполнена. Запишите в резерв или увеличьте вместимость в «Группах»')
     setBusy(true); setErr(null)
     try {
       const r: any = await rpc('enroll_child', { p_parent_name: parent, p_phone: phonePretty(phone), p_child_name: name, p_birth: birth || null, p_group: gid,
@@ -70,7 +79,7 @@ function Enroll({ onClose }: { onClose: (ok: boolean) => void }) {
       <div><label htmlFor="t">Телефон родителя</label><input id="t" inputMode="tel" value={phone} onChange={(e) => setPhone(e.target.value)} /></div>
       <div><span className="lbl">Откуда узнали</span><Chips options={['Instagram', 'Google', 'Сайт', 'Рекомендация', 'Telegram'].map((x) => [x, x] as [string, string])} value={src} onChange={setSrc} /></div>
       <div><span className="lbl">Филиал</span><Chips options={branches.map(([id, n]) => [id, n] as [string, string])} value={branch} onChange={(v) => { setBranch(v); setGid(null) }} /></div>
-      {branch && <div><span className="lbl">Группа</span><Chips options={gs.filter((g) => g.branch_id === branch).map((g) => [g.id, `${g.title || hm(g.start_time)}`] as [string, string])} value={gid} onChange={setGid} /></div>}
+      {branch && <div><span className="lbl">Группа</span><Chips options={gs.filter((g) => g.branch_id === branch).map((g) => { const x = load(g.id); return [g.id, `${g.title || hm(g.start_time)}${x ? ` · ${x.active_kids}/${x.capacity}` : ''}`] as [string, string] })} value={gid} onChange={setGid} /></div>}
       {mode === 'trial' && <div><label htmlFor="d">Дата пробного</label><input id="d" type="date" value={date} onChange={(e) => setDate(e.target.value)} /></div>}
       <Err e={err} />
       <button className="btn" disabled={busy} onClick={save}>{mode === 'trial' ? 'Записать на пробное' : mode === 'group' ? 'Добавить в группу' : 'Записать в резерв'}</button>

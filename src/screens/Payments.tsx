@@ -6,11 +6,11 @@ import PaySheet from './PaySheet'
 import ChildCard from './ChildCard'
 
 export default function Payments({ me }: { me: Me }) {
-  const [view, setView] = useState<'in' | 'groups'>('in')
+  const [view, setView] = useState<'in' | 'groups' | 'cash'>('in')
   return (
     <>
-      <Chips options={[['in', 'Входящие EPOS'], ['groups', 'Кто оплатил']]} value={view} onChange={setView} />
-      {view === 'in' ? <Incoming me={me} /> : <ByGroup />}
+      <Chips options={[['in', 'Входящие EPOS'], ['groups', 'Кто оплатил'], ['cash', 'Наличные']]} value={view} onChange={setView} />
+      {view === 'in' ? <Incoming me={me} /> : view === 'groups' ? <ByGroup /> : <CashOverview />}
     </>
   )
 }
@@ -125,6 +125,26 @@ function ByGroup() {
         </div>
       )}
       {card && <ChildCard id={card} onClose={() => setCard(null)} />}
+    </>
+  )
+}
+
+function CashOverview() {
+  const { data, error } = useLoad(() => rpc<any[]>('cash_overview'), [])
+  const total = (data || []).reduce((a, r) => a + Number(r.on_hand) + Number(r.pending), 0)
+  return (
+    <>
+      <p className="sub">Сколько наличных сейчас у каждого сотрудника: принято в кассу минус сдано. «Ждёт» — сдал, но получение ещё не подтверждено (подтверждается на вкладке «Сегодня»).</p>
+      <Err e={error} />
+      {!data ? <Loading /> : <div className="list">
+        {data.length === 0 && <div className="row meta">Наличных оплат ещё не было</div>}
+        {data.map((r: any) => <div className="row" key={r.staff_id}>
+          <span className="grow"><span className="name">{r.full_name}</span><br />
+            <span className="meta">{Number(r.pending) ? `ждёт подтверждения ${money(r.pending)} BYN · ` : ''}{r.last_handover ? `последняя сдача ${dm(r.last_handover.slice(0, 10))}` : 'ещё не сдавал(а)'}</span></span>
+          <Pill c={Number(r.on_hand) > 0 ? 'p-warn' : 'p-ok'}>{money(r.on_hand)} BYN</Pill>
+        </div>)}
+      </div>}
+      <div className="calc">Всего вне кассы: {money(total)} BYN</div>
     </>
   )
 }

@@ -31,7 +31,7 @@ export default function Cash({ me }: { me: Me }) {
       {!hos.data ? <Loading /> : <div className="list">{hos.data.length === 0 && <div className="row meta">Ещё не сдавали</div>}
         {hos.data.map((h: any) => <div className="row" key={h.id}><span className="grow"><span className="name">{money(h.amount)} BYN</span><br /><span className="meta">{dm(h.created_at.slice(0, 10))}</span></span><span className={`pill ${h.status === 'confirmed' ? 'p-ok' : 'p-warn'}`}>{h.status === 'confirmed' ? 'Получено' : 'Ждёт подтверждения'}</span></div>)}</div>}
       {give && <Sheet onClose={() => setGive(false)}>
-        <h2>Сдать наличные</h2><p className="sub">Администратор подтвердит получение. До этого сумма числится за вами.</p>
+        <h2>Сдать наличные</h2><p className="sub">Сумма сразу уйдёт из «у вас на руках» и будет ждать подтверждения администратора.</p>
         <div><label htmlFor="ha">Сумма, BYN</label><input id="ha" inputMode="decimal" value={amt} onChange={(e) => setAmt(e.target.value)} /></div>
         <button className="btn" onClick={handover}>Сдать</button><button className="btn ghost" onClick={() => setGive(false)}>Отмена</button>
       </Sheet>}
