@@ -1,16 +1,17 @@
 import { useState } from 'react'
 import { rpc, supabase, money, dm, hm, phonePretty, type Me } from '../lib'
 import { useLoad, Loading, Err, Pill, Chips, toast } from '../ui'
+import Indiv from './Indiv'
 import { parseEposPdf } from '../epos'
 import PaySheet from './PaySheet'
 import ChildCard from './ChildCard'
 
 export default function Payments({ me }: { me: Me }) {
-  const [view, setView] = useState<'in' | 'groups' | 'cash'>('in')
+  const [view, setView] = useState<'in' | 'groups' | 'cash' | 'indiv'>('in')
   return (
     <>
-      <Chips options={[['in', 'Входящие EPOS'], ['groups', 'Кто оплатил'], ['cash', 'Наличные']]} value={view} onChange={setView} />
-      {view === 'in' ? <Incoming me={me} /> : view === 'groups' ? <ByGroup /> : <CashOverview />}
+      <Chips options={[['in', 'Входящие EPOS'], ['groups', 'Кто оплатил'], ['cash', 'Наличные'], ['indiv', 'Индивидуальные']]} value={view} onChange={setView} />
+      {view === 'in' ? <Incoming me={me} /> : view === 'groups' ? <ByGroup /> : view === 'indiv' ? <Indiv me={me} /> : <CashOverview />}
     </>
   )
 }

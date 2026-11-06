@@ -7,6 +7,7 @@ import Payments from './screens/Payments'
 import Cash from './screens/Cash'
 import { Salary } from './screens/Director'
 import Staff from './screens/Staff'
+import Indiv from './screens/Indiv'
 
 const ROLE: Record<string, string> = { director: 'Директор', admin: 'Администратор', coach: 'Тренер' }
 const TABS: Record<string, [string, string][]> = {
@@ -41,9 +42,9 @@ export default function App() {
   if (!me) return <div className="app"><Login onIn={loadMe} error={error} /></div>
   if (me.must_change_password) return <div className="app"><NewPassword onDone={loadMe} /></div>
 
-  const tabs = TABS[me.role]
+  const tabs = me.role === 'coach' && me.indiv_enabled ? [...TABS.coach.slice(0, 2), ['indiv', 'Индивид.'] as [string, string], ...TABS.coach.slice(2)] : TABS[me.role]
   const body = tab === 'today' ? <Today me={me} /> : tab === 'kids' ? <Children me={me} /> : tab === 'pay' ? <Payments me={me} />
-    : tab === 'cash' ? <Cash me={me} /> : tab === 'salary' ? <Salary /> : <Staff />
+    : tab === 'cash' ? <Cash me={me} /> : tab === 'salary' ? <Salary /> : tab === 'indiv' ? <Indiv me={me} /> : <Staff />
   return (
     <>
       <div className="app">

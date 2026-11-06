@@ -7,7 +7,7 @@ export const supabase = createClient(
 )
 
 export type Role = 'director' | 'admin' | 'coach'
-export type Me = { id: string; full_name: string; role: Role; must_change_password: boolean }
+export type Me = { id: string; full_name: string; role: Role; must_change_password: boolean; indiv_enabled?: boolean }
 
 /** Вызов функции базы; ошибку превращаем в понятный текст */
 export async function rpc<T = any>(fn: string, args: Record<string, unknown> = {}): Promise<T> {

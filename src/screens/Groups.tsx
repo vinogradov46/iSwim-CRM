@@ -89,6 +89,7 @@ function EditGroup({ g, me, onClose }: { g: G | null; me: Me; onClose: (ok: bool
       {(director || !g) && <div><span className="lbl">Тренер</span><div className="chips">{(coaches.data || []).filter((x: any) => x.role === 'coach').map((x: any) =>
         <button key={x.id} className="chip" aria-pressed={coach === x.id} onClick={() => setCoach(x.id)}>{x.full_name}</button>)}</div></div>}
       {g && !director && <p className="sub">Тренер: {g.coach_name || '—'} (меняет директор)</p>}
+      {g && g.weekdays.length > 1 && <GroupDays g={g} />}
       {g && <p className="note">Если убрать день недели, будущие занятия в этот день удалятся (если в них нет отметок и отработок).</p>}
       <Err e={err} />
       <button className="btn" disabled={busy} onClick={save}>{busy ? 'Сохраняем…' : 'Сохранить'}</button>
@@ -99,5 +100,37 @@ function EditGroup({ g, me, onClose }: { g: G | null; me: Me; onClose: (ok: bool
       {sure && <p className="note">Закрыть можно только пустую группу. Будущие занятия удалятся, история останется.</p>}
       <button className="btn ghost" onClick={() => onClose(false)}>Отмена</button>
     </Sheet>
+  )
+}
+
+/** Кто в какие дни ходит (для групп с несколькими днями) */
+function GroupDays({ g }: { g: G }) {
+  const { data, error, reload } = useLoad(() => rpc<{ child_id: string; full_name: string; status: string; days: number[] | null }[]>('group_members', { p_group: g.id }), [g.id])
+  const [busy, setBusy] = useState<string | null>(null)
+  const [open, setOpen] = useState(false)
+  async function set(cid: string, days: number[] | null) {
+    setBusy(cid)
+    try { await rpc('set_enrollment_days', { p_child: cid, p_group: g.id, p_days: days }); reload() } catch (e: any) { toast(e.message) }
+    setBusy(null)
+  }
+  const list = (data || []).filter((k) => k.status === 'active')
+  const per = g.weekdays.map((d) => [d, list.filter((k) => !k.days || k.days.includes(d)).length])
+  return (
+    <div className="miss">
+      <span className="lbl">Кто в какие дни ходит</span>
+      <p className="sub">{per.map(([d, n]) => `${DAYS[d - 1]}: ${n} детей`).join(' · ')}</p>
+      {!open ? <button className="btn sm ghost" onClick={() => setOpen(true)}>Настроить дни для детей</button> : <>
+        <p className="note">Если ребёнок ходит не во все дни группы — отметьте его дни. На занятии тренер увидит только тех, кто должен прийти в этот день.</p>
+        <Err e={error} />
+        {!data ? <Loading /> : <div className="list">{list.map((k) => (
+          <div className="row" key={k.child_id} style={{ flexWrap: 'wrap', gap: 6 }}>
+            <span className="grow name" style={{ minWidth: 140 }}>{k.full_name}</span>
+            <span className="chips" style={{ flexWrap: 'nowrap' }}>
+              <button className="chip" disabled={busy === k.child_id} aria-pressed={!k.days} onClick={() => set(k.child_id, null)}>Все</button>
+              {g.weekdays.map((d) => <button key={d} className="chip" disabled={busy === k.child_id} aria-pressed={!!k.days && k.days.length === 1 && k.days[0] === d} onClick={() => set(k.child_id, [d])}>{DAYS[d - 1]}</button>)}
+            </span>
+          </div>))}</div>}
+      </>}
+    </div>
   )
 }

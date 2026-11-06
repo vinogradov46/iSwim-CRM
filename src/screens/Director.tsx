@@ -19,7 +19,7 @@ export function Salary() {
       {!data ? <Loading /> : <div className="list">{data.map((r) => (
         <div className="miss" key={r.staff_id}>
           <div style={{ display: 'flex', gap: 10 }}><span className="grow"><span className="name">{r.full_name}</span><br />
-            <span className="meta">{r.pay_type === 'percent' ? `${r.pay_pct}% от ${money(r.base_amount)} BYN оплат` : `${r.sessions_done} занятий${r.pay_rate ? ` × ${money(r.pay_rate)}` : ' · ставка не задана'}`}</span></span>
+            <span className="meta">{r.pay_type === 'percent' ? `${r.pay_pct}% от ${money(r.base_amount)} BYN оплат` : `${r.sessions_done} занятий${r.pay_rate ? ` × ${money(r.pay_rate)}` : ' · ставка не задана'}`}{r.indiv_done > 0 ? ` + ${r.indiv_done} индивид. = ${money(r.indiv_amount)} BYN${r.indiv_no_rate ? ` (${r.indiv_no_rate} без ставки)` : ''}` : ''}</span></span>
             <span className="big" style={{ fontSize: 18 }}>{r.salary != null ? money(r.salary) : '—'}</span></div>
           {r.pay_type !== 'percent' && <div style={{ display: 'flex', gap: 8 }}>
             <input inputMode="decimal" placeholder={r.pay_rate ? String(r.pay_rate) : 'ставка за занятие'} value={rates[r.staff_id] ?? ''} onChange={(e) => setRates({ ...rates, [r.staff_id]: e.target.value })} />
@@ -48,7 +48,7 @@ export function Journal() {
     bot_ignored: 'Платёж EPOS пропущен', bot_matched: 'Платёж EPOS привязан', import_journal: 'Импорт журнала', child_edit: 'Изменены данные ребёнка', freeze: 'Заморозка', unfreeze: 'Разморозка',
     leave: 'Ушёл', return: 'Вернулся', move: 'Перевод в группу', add_group: 'Добавлена группа', remove_group: 'Убрана группа', to_reserve: 'В резерв', from_reserve: 'Из резерва',
     retrial: 'Перенос пробного', task: 'Напоминание', set_balance: 'Корректировка баланса', set_sub_end: 'Срок абонемента', cert: 'Справка', edit: 'Изменены данные ребёнка',
-    staff_login: 'Выдан вход сотруднику', groups_coach: 'Тренер назначен на группы' }
+    staff_login: 'Выдан вход сотруднику', indiv_add: 'Индивидуальное занятие', indiv_edit: 'Изменено индивидуальное', indiv_cancel: 'Удалено индивидуальное', staff_indiv: 'Индивидуальные: настройка', enroll_days: 'Дни посещения', groups_coach: 'Тренер назначен на группы' }
   const label = (a: string) => A[a] || (a.startsWith('child_') && A[a.slice(6)]) || a
   return (
     <>
@@ -57,7 +57,7 @@ export function Journal() {
       <Err e={error} />
       {!data ? <Loading /> : <div className="list">{data.map((j: any) => (
         <div className="row" key={j.id}><span className="grow"><span className="meta">{new Date(j.at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' })} · {name(j.actor_id)}</span><br />
-          {label(j.action)}{j.children?.full_name ? `: ${j.children.full_name}` : ''}{j.details?.amount ? ` · ${money(j.details.amount)} BYN` : ''}{j.details?.reason ? ` · ${j.details.reason}` : ''}</span></div>))}</div>}
+          {label(j.action)}{j.children?.full_name ? `: ${j.children.full_name}` : ''}{j.details?.amount ? ` · ${money(j.details.amount)} BYN` : ''}{j.details?.client ? `: ${j.details.client}` : ''}{j.details?.reason ? ` · ${j.details.reason}` : ''}</span></div>))}</div>}
     </>
   )
 }

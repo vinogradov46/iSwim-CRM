@@ -6,7 +6,7 @@ import { Journal } from './Director'
 type Person = {
   id: string; full_name: string; role: 'director' | 'admin' | 'coach'; phone: string | null; active: boolean
   pay_type: 'lesson' | 'percent' | null; pay_rate: number | null; pay_pct: number | null
-  has_login: boolean; must_change_password: boolean; last_sign_in_at: string | null
+  has_login: boolean; must_change_password: boolean; last_sign_in_at: string | null; indiv_enabled: boolean; indiv_rate: number | null
   groups: { id: string; label: string }[]
 }
 const ROLE = { director: 'Директор', admin: 'Администратор', coach: 'Тренер' }
@@ -88,6 +88,7 @@ function PersonSheet({ p, onEdit, onClose }: { p: Person; onEdit: () => void; on
         {!p.phone && <p className="note">Чтобы выдать доступ, сначала укажите телефон: «Изменить».</p>}
       </>}
       <Err e={err} />
+      {p.active && p.role === 'coach' && <IndivBlock p={p} onSaved={() => onClose(true)} />}
       {p.active && p.role === 'coach' && <button className="btn ghost" onClick={() => setAssign(true)}>Назначить группы</button>}
       {p.role !== 'director' && <button className="btn ghost" onClick={onEdit}>Изменить данные и ставку</button>}
       {p.role !== 'director' && (p.active
@@ -165,5 +166,31 @@ function AssignSheet({ coach, onClose }: { coach: Person; onClose: (ok: boolean)
         </div>))}</div>}
       <button className="btn ghost" onClick={() => onClose(changed)}>Готово</button>
     </Sheet>
+  )
+}
+
+/** Индивидуальные занятия тренера: включить и ставка за одно занятие */
+function IndivBlock({ p, onSaved }: { p: Person; onSaved: () => void }) {
+  const [on, setOn] = useState(p.indiv_enabled)
+  const [rate, setRate] = useState(p.indiv_rate != null ? String(p.indiv_rate) : '')
+  const [err, setErr] = useState<string | null>(null)
+  const changed = on !== p.indiv_enabled || rate !== (p.indiv_rate != null ? String(p.indiv_rate) : '')
+  async function save() {
+    const r = rate.trim() ? parseFloat(rate.replace(',', '.')) : null
+    if (r != null && !(r >= 0)) return setErr('Ставка — число')
+    setErr(null)
+    try { await rpc('staff_set_indiv', { p_staff: p.id, p_enabled: on, p_rate: r }); toast('Сохранено'); onSaved() } catch (e: any) { setErr(e.message) }
+  }
+  return (
+    <div className="miss">
+      <span className="lbl">Индивидуальные занятия</span>
+      <div className="chips">
+        <button className="chip" aria-pressed={on} onClick={() => setOn(true)}>Ведёт индивидуальные</button>
+        <button className="chip" aria-pressed={!on} onClick={() => setOn(false)}>Нет</button></div>
+      {on && <div><label htmlFor="ir">Тренеру за одно индивидуальное, BYN</label><input id="ir" inputMode="decimal" value={rate} onChange={(e) => setRate(e.target.value)} placeholder="Например 25" /></div>}
+      {on && !rate.trim() && <p className="note">Пока ставки нет, индивидуальные в зарплату не попадут. Ставка фиксируется на момент занятия.</p>}
+      <Err e={err} />
+      {changed && <button className="btn sm" onClick={save}>Сохранить</button>}
+    </div>
   )
 }

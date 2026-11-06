@@ -19,9 +19,9 @@ export default function Cash({ me }: { me: Me }) {
   return (
     <>
       <div className="list"><div className="row"><span className="grow"><span className="name">Моя зарплата за месяц</span><br />
-        <span className="meta">{!my ? '…' : my.pay_type === 'percent' ? `${my.pay_pct}% от ${money(my.base_amount)} BYN оплат групп` : my.pay_rate ? `${my.sessions_done} занятий × ${money(my.pay_rate)} BYN` : `${my.sessions_done} занятий · ставку ещё не внесли`}</span></span>
+        <span className="meta">{!my ? '…' : my.pay_type === 'percent' ? `${my.pay_pct}% от ${money(my.base_amount)} BYN оплат групп` : my.pay_rate ? `${my.sessions_done} занятий × ${money(my.pay_rate)} BYN` : `${my.sessions_done} занятий · ставку ещё не внесли`}{my?.indiv_done > 0 ? ` + ${my.indiv_done} индивид. = ${money(my.indiv_amount)} BYN` : ''}</span></span>
         <span className="big" style={{ fontSize: 20 }}>{my?.salary != null ? `${money(my.salary)} BYN` : '—'}</span></div></div>
-      <div className="stats two"><div className={`stat ${on > 0 ? 'hot' : ''}`}><b>{money(on)}</b><small>BYN наличных у вас</small></div>
+      <div className="stats two"><div className={`stat ${on > 0 ? 'hot' : ''}`}><b>{money(on)}</b><small>BYN наличных у вас{me.indiv_enabled ? ' (группы + индивид.)' : ''}</small></div>
         <button className="stat" disabled={on <= 0} onClick={() => { setAmt(String(on)); setGive(true) }}><b>→</b><small>Сдать администратору</small></button></div>
       <h2>Принятые оплаты</h2>
       <Err e={pays.error} />

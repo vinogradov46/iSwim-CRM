@@ -9,6 +9,7 @@ const LOST = ['Не понравилось', 'Дорого', 'Неудобное
 const PLAN: Record<string, string> = { count: 'абонемент', single: 'разовое', trial: 'пробное', month: 'месяц', annual: 'годовой', opening: 'стартовый остаток' }
 const addDays = (n: number, from = todayISO()) => { const d = new Date(from + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
 
+const WD = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 export default function ChildCard({ id, onClose, me }: { id: string; onClose: () => void; me?: Me }) {
   const { data, error, reload } = useLoad(() => rpc<any>('child_card', { p_child: id }), [id])
   const whoami = useLoad(() => (me ? Promise.resolve([me]) : rpc<Me[]>('whoami')), [])
@@ -32,6 +33,9 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
   const self = whoami.data?.[0]
   const office = !!self && self.role !== 'coach'
 
+  async function setDays(group: string, days: number[] | null) {
+    try { await rpc('set_enrollment_days', { p_child: id, p_group: group, p_days: days }); toast(days ? 'Дни сохранены' : 'Ходит во все дни группы'); reload() } catch (e: any) { toast(e.message) }
+  }
   async function act(action: string, args: any = {}, msg = 'Сохранено') {
     try { await rpc('child_action', { p_child: id, p_action: action, p_args: args }); toast(msg); setMode(null); reload() }
     catch (e: any) { toast(e.message) }
@@ -58,7 +62,12 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
       <div><span className="lbl">Группы</span>
         {data.groups.length === 0 && <div className="meta">Нет групп</div>}
         {data.groups.map((g: any) => <div key={g.group_id} style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-          <span className="grow">{g.title}{g.primary ? ' · основная' : ''}{g.status === 'reserve' ? ' · резерв' : ''}</span>
+          <span className="grow">{g.title}{g.primary ? ' · основная' : ''}{g.status === 'reserve' ? ' · резерв' : ''}
+            {office && g.weekdays?.length > 1 && <span className="chips" style={{ marginTop: 4 }}>
+              <button className="chip" aria-pressed={!g.days} onClick={() => setDays(g.group_id, null)}>Все дни</button>
+              {g.weekdays.map((d: number) => <button key={d} className="chip" aria-pressed={!!g.days && g.days.length === 1 && g.days[0] === d} onClick={() => setDays(g.group_id, [d])}>только {WD[d - 1]}</button>)}
+            </span>}
+            {!office && g.days && <span className="meta"> · ходит {g.days.map((d: number) => WD[d - 1]).join('/')}</span>}</span>
           {office && !g.primary && <button className="btn sm ghost" onClick={() => act('remove_group', { group_id: g.group_id }, 'Группа убрана')}>Убрать</button>}
         </div>)}
       </div>
