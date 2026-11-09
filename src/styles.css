@@ -178,3 +178,5 @@ input[type=file]{padding:8px}
   .x:hover{color:var(--fg)}
 }
 @media (min-width:1000px) and (prefers-reduced-motion:no-preference){.scrim.side .sheet{animation:side .18s ease-out}@keyframes side{from{transform:translateX(30px);opacity:.6}}}
+
+.marks>.mk:only-child{grid-column:1/-1}

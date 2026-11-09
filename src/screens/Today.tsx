@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { rpc, dateRu, todayISO, hm, dm, phonePretty, balanceState, gshort, gname, type Me } from '../lib'
+import { rpc, supabase, dateRu, todayISO, hm, dm, phonePretty, balanceState, gshort, gname, type Me } from '../lib'
 
 const addDays = (iso: string, n: number) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
 import { useLoad, Loading, Err, Pill, Sheet, toast } from '../ui'
@@ -17,7 +17,9 @@ export default function Today({ me }: { me: Me }) {
   const inbox = useLoad(() => (office ? rpc<any>('office_inbox') : Promise.resolve(null)), [office])
   const yday = addDays(todayISO(), -1)
   const prev = useLoad(() => (office ? Promise.resolve([] as Sess[]) : rpc<Sess[]>('sessions_on', { p_date: yday })), [office])
-  const prevOpen = (prev.data || []).filter((s) => s.status === 'planned' && s.can_mark && s.marked < s.expected)
+  const brs = useLoad(async () => (office ? [] : (await supabase.from('branches').select('name,auto_absent_from')).data || []), [office])
+  const isAuto = (s: Sess) => (brs.data || []).some((b: any) => b.name === s.branch && b.auto_absent_from && b.auto_absent_from <= yday)
+  const prevOpen = (prev.data || []).filter((s) => s.status === 'planned' && s.can_mark && s.marked < s.expected && (s.marked === 0 || !isAuto(s)))
 
   if (open) return <Session id={open.id} day={open.day} me={me} onBack={() => { setOpen(null); reload(); inbox.reload(); prev.reload() }} />
   const late = (data || []).filter((s) => s.status === 'planned' && s.ended && s.marked < s.expected)
@@ -32,7 +34,7 @@ export default function Today({ me }: { me: Me }) {
       </div>
       {office && late.length > 0 && <div className="warnbox">Не отмечено после занятия: {late.length}</div>}
       {!office && day === todayISO() && prevOpen.length > 0 && <div className="warnbox">
-        <b>Вчера отмечено не до конца.</b> Можно доделать сегодня, завтра уже только через администратора.
+        <b>Вчера не отмечены занятия.</b> Можно доделать сегодня, завтра уже только через администратора.
         <div className="list" style={{ marginTop: 8 }}>{prevOpen.map((s) => <button className="row" key={s.session_id} onClick={() => setOpen({ id: s.session_id, day: yday })}>
           <span className="time">{hm(s.start_time)}</span><span className="grow"><span className="name">{s.branch} · {gshort(s.title)}</span><br /><span className="meta">отмечено {s.marked} из {s.expected}</span></span><Pill c="p-warn">Отметить</Pill></button>)}</div>
       </div>}
@@ -172,6 +174,10 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
   const [busy, setBusy] = useState(false)
   const s = sess.data
   const canMark = !!s?.can_mark
+  const br = useLoad(async () => (await supabase.from('branches').select('name,auto_absent_from')).data || [], [])
+  const autoFrom = (br.data || []).find((b: any) => b.name === s?.branch)?.auto_absent_from as string | undefined
+  const auto = !!autoFrom && autoFrom <= day
+  const coachAuto = auto && me.role === 'coach'
   async function mark(c: R, m: string | null, reason?: string) {
     if (busy) return
     setBusy(true)
@@ -200,7 +206,8 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
       {me.role !== 'coach' && canMark && <div className="warnbox">Вы правите отметки тренера. Каждое изменение попадёт в журнал</div>}
       {!canMark && s && <div className="note">{day > todayISO() ? 'Отмечать можно в день занятия.' : 'Тренер отмечает в день занятия или на следующий день. Позже исправляет администратор.'}</div>}
       <Err e={error} />
-      {canMark && s?.ended && unmarked > 0 && rows.some((c) => c.mark) && <div className="warnbox">Не отмечено: {unmarked}. Отметьте каждого — «был» или «не был», иначе пропуск не учтётся.{me.role === 'coach' && day < todayISO() ? ' Сегодня последний день, когда можно отметить.' : ''}</div>}
+      {coachAuto && canMark && <div className="okbox">Отмечайте только тех, кто пришёл. Остальным программа сама поставит «не был» после того, как закроется отметка (занятие спишется). Возврат и отработку делает администратор.</div>}
+      {!coachAuto && canMark && s?.ended && unmarked > 0 && rows.some((c) => c.mark) && <div className="warnbox">Не отмечено: {unmarked}. Отметьте каждого — «был» или «не был», иначе пропуск не учтётся.{me.role === 'coach' && day < todayISO() ? ' Сегодня последний день, когда можно отметить.' : ''}</div>}
       {canMark && unmarked > 0 && <button className="btn okb" onClick={allHere}>Все были ({unmarked}), потом исправить отсутствующих</button>}
       {!data ? <Loading /> : (
         <div className="list">
@@ -228,9 +235,9 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
                 {canMark && !frozen && <>
                   <div className="marks">
                     <button className="mk m-p" aria-pressed={pressed === 'present'} onClick={() => mark(c, pressed === 'present' ? null : 'present')}>{c.kind === 'trial' ? 'Пришёл' : 'Был'}</button>
-                    <button className="mk m-a" aria-pressed={pressed === 'absent'} onClick={() => c.kind === 'trial' ? mark(c, pressed === 'absent' ? null : 'noshow') : mark(c, pressed === 'absent' ? null : 'absent', 'none')}>{c.kind === 'trial' ? 'Не пришёл' : 'Пропуск'}</button>
+                    {!(coachAuto && c.kind === 'group') && <button className="mk m-a" aria-pressed={pressed === 'absent'} onClick={() => c.kind === 'trial' ? mark(c, pressed === 'absent' ? null : 'noshow') : mark(c, pressed === 'absent' ? null : 'absent', 'none')}>{c.kind === 'trial' ? 'Не пришёл' : 'Пропуск'}</button>}
                   </div>
-                  {c.kind !== 'trial' && pressed === 'absent' && (
+                  {c.kind !== 'trial' && pressed === 'absent' && !(coachAuto && c.kind === 'group') && (
                     <div className="reasons">
                       {([['none', 'Без причины'], ['sick', 'Болеет — будет справка']] as const).map(([v, l]) => (
                         <button key={v} className="mk m-r" aria-pressed={c.absence_reason === v} onClick={() => mark(c, 'absent', v)}>{l}</button>
@@ -244,7 +251,8 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
           {rows.length === 0 && <div className="row meta">В группе пока никого</div>}
         </div>
       )}
-      <p className="note">«Был» и «Пропуск» списывают занятие. «Болеет — будет справка» тоже списывает, но попадает администратору: когда принесут справку, он вернёт занятие или даст бесплатную отработку. Бесплатная отработка не списывается.</p>
+      {auto ? <p className="note">«Был» списывает занятие. Кого не отметили — через сутки после окна отметки программа ставит «не был» и тоже списывает. Если принесут справку или договорятся об отработке, администратор вернёт занятие в карточке ребёнка. Бесплатная отработка не списывается.</p> :
+      <p className="note">«Был» и «Пропуск» списывают занятие. «Болеет — будет справка» тоже списывает, но попадает администратору: когда принесут справку, он вернёт занятие или даст бесплатную отработку. Бесплатная отработка не списывается.</p>}
       {pay && <PaySheet childId={pay} me={me} plan={rows.find((r) => r.child_id === pay)?.kind === 'trial' ? 'trial' : undefined} onClose={(ok) => { setPay(null); if (ok) reload() }} />}
       {card && <ChildCard id={card} onClose={() => { setCard(null); reload() }} />}
     </div>
