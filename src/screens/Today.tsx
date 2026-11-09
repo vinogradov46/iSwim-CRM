@@ -15,8 +15,11 @@ export default function Today({ me }: { me: Me }) {
   const { data, error, reload } = useLoad(() => rpc<Sess[]>('sessions_on', { p_date: day }), [day])
   const office = me.role !== 'coach'
   const inbox = useLoad(() => (office ? rpc<any>('office_inbox') : Promise.resolve(null)), [office])
+  const yday = addDays(todayISO(), -1)
+  const prev = useLoad(() => (office ? Promise.resolve([] as Sess[]) : rpc<Sess[]>('sessions_on', { p_date: yday })), [office])
+  const prevOpen = (prev.data || []).filter((s) => s.status === 'planned' && s.can_mark && s.marked < s.expected)
 
-  if (open) return <Session id={open.id} day={open.day} me={me} onBack={() => { setOpen(null); reload(); inbox.reload() }} />
+  if (open) return <Session id={open.id} day={open.day} me={me} onBack={() => { setOpen(null); reload(); inbox.reload(); prev.reload() }} />
   const late = (data || []).filter((s) => s.status === 'planned' && s.ended && s.marked < s.expected)
   return (
     <div className={office ? 'split' : 'col'}>
@@ -28,6 +31,11 @@ export default function Today({ me }: { me: Me }) {
         <input type="date" value={day} onChange={(e) => setDay(e.target.value)} style={{ width: 'auto' }} aria-label="Дата" />
       </div>
       {office && late.length > 0 && <div className="warnbox">Не отмечено после занятия: {late.length}</div>}
+      {!office && day === todayISO() && prevOpen.length > 0 && <div className="warnbox">
+        <b>Вчера отмечено не до конца.</b> Можно доделать сегодня, завтра уже только через администратора.
+        <div className="list" style={{ marginTop: 8 }}>{prevOpen.map((s) => <button className="row" key={s.session_id} onClick={() => setOpen({ id: s.session_id, day: yday })}>
+          <span className="time">{hm(s.start_time)}</span><span className="grow"><span className="name">{s.branch} · {gshort(s.title)}</span><br /><span className="meta">отмечено {s.marked} из {s.expected}</span></span><Pill c="p-warn">Отметить</Pill></button>)}</div>
+      </div>}
       <Err e={error} />
       {!data ? <Loading /> : (
         <div className="list">
@@ -190,8 +198,9 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
       <button className="back" onClick={onBack}>← Назад</button>
       {s && <div><h2>{s.branch} · {gshort(s.title)}</h2><p className="sub" style={{ textTransform: 'capitalize' }}>{dateRu(day)} · {hm(s.start_time)} · {s.substitute_name ? `замена: ${s.substitute_name}` : s.coach_name}</p></div>}
       {me.role !== 'coach' && canMark && <div className="warnbox">Вы правите отметки тренера. Каждое изменение попадёт в журнал</div>}
-      {!canMark && s && <div className="note">{day > todayISO() ? 'Отмечать можно в день занятия.' : 'Отмечать можно только в день занятия. Позже исправляет администратор.'}</div>}
+      {!canMark && s && <div className="note">{day > todayISO() ? 'Отмечать можно в день занятия.' : 'Тренер отмечает в день занятия или на следующий день. Позже исправляет администратор.'}</div>}
       <Err e={error} />
+      {canMark && s?.ended && unmarked > 0 && rows.some((c) => c.mark) && <div className="warnbox">Не отмечено: {unmarked}. Отметьте каждого — «был» или «не был», иначе пропуск не учтётся.{me.role === 'coach' && day < todayISO() ? ' Сегодня последний день, когда можно отметить.' : ''}</div>}
       {canMark && unmarked > 0 && <button className="btn okb" onClick={allHere}>Все были ({unmarked}), потом исправить отсутствующих</button>}
       {!data ? <Loading /> : (
         <div className="list">
