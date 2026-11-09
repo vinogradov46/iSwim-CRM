@@ -172,6 +172,7 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
   const [pay, setPay] = useState<string | null>(null)
   const [card, setCard] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [guest, setGuest] = useState(false)
   const s = sess.data
   const canMark = !!s?.can_mark
   const br = useLoad(async () => (await supabase.from('branches').select('name,auto_absent_from')).data || [], [])
@@ -192,6 +193,9 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
       reload()
     } catch (e: any) { toast(e.message) }
     setBusy(false)
+  }
+  async function unguest(c: R) {
+    try { await rpc('remove_guest', { p_session: id, p_child: c.child_id }); toast(`${c.full_name} убран из занятия, занятие возвращено`); reload() } catch (e: any) { toast(e.message) }
   }
   async function allHere() {
     try { const r: any = await rpc('mark_all_present', { p_session: id }); toast(r.unpaid.length ? `Отмечено ${r.marked}. Без оплаты: ${r.unpaid.join(', ')}` : `Отмечено ${r.marked}. Исправьте отсутствующих`); reload() }
@@ -221,7 +225,7 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
             return (
               <div className={`kid${frozen ? ' frozen' : ''}`} key={c.child_id + c.kind}>
                 <button className="kidname" onClick={() => setCard(c.child_id)}>
-                  <span className="name">{c.full_name}</span>{c.kind !== 'group' && <> <span className="meta">{c.kind === 'trial' ? '· пробное' : '· отработка'}</span></>}<br />
+                  <span className="name">{c.full_name}</span>{c.kind !== 'group' && <> <span className="meta">{c.kind === 'trial' ? '· пробное' : c.kind === 'guest' ? '· из другой группы' : '· отработка'}</span></>}<br />
                   <span className="meta phone">{phonePretty(c.phone)}</span>
                   {c.notes && <><br /><span className="meta" style={{ color: 'var(--warn)' }}>Важно: {c.notes}</span></>}
                 </button>
@@ -234,8 +238,8 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
                 </div>
                 {canMark && !frozen && <>
                   <div className="marks">
-                    <button className="mk m-p" aria-pressed={pressed === 'present'} onClick={() => mark(c, pressed === 'present' ? null : 'present')}>{c.kind === 'trial' ? 'Пришёл' : 'Был'}</button>
-                    {!(coachAuto && c.kind === 'group') && <button className="mk m-a" aria-pressed={pressed === 'absent'} onClick={() => c.kind === 'trial' ? mark(c, pressed === 'absent' ? null : 'noshow') : mark(c, pressed === 'absent' ? null : 'absent', 'none')}>{c.kind === 'trial' ? 'Не пришёл' : 'Пропуск'}</button>}
+                    <button className="mk m-p" aria-pressed={pressed === 'present'} onClick={() => c.kind === 'guest' && pressed === 'present' ? unguest(c) : mark(c, pressed === 'present' ? null : 'present')}>{c.kind === 'trial' ? 'Пришёл' : 'Был'}</button>
+                    {!((coachAuto && c.kind === 'group') || c.kind === 'guest') && <button className="mk m-a" aria-pressed={pressed === 'absent'} onClick={() => c.kind === 'trial' ? mark(c, pressed === 'absent' ? null : 'noshow') : mark(c, pressed === 'absent' ? null : 'absent', 'none')}>{c.kind === 'trial' ? 'Не пришёл' : 'Пропуск'}</button>}
                   </div>
                   {c.kind !== 'trial' && pressed === 'absent' && !(coachAuto && c.kind === 'group') && (
                     <div className="reasons">
@@ -251,6 +255,8 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
           {rows.length === 0 && <div className="row meta">В группе пока никого</div>}
         </div>
       )}
+      {canMark && <button className="btn ghost" onClick={() => setGuest(true)}>+ Пришёл ребёнок из другой группы</button>}
+      {guest && <GuestSheet session={id} onClose={(ok) => { setGuest(false); if (ok) reload() }} />}
       {auto ? <p className="note">«Был» списывает занятие. Кого не отметили — через сутки после окна отметки программа ставит «не был» и тоже списывает. Если принесут справку или договорятся об отработке, администратор вернёт занятие в карточке ребёнка. Бесплатная отработка не списывается.</p> :
       <p className="note">«Был» и «Пропуск» списывают занятие. «Болеет — будет справка» тоже списывает, но попадает администратору: когда принесут справку, он вернёт занятие или даст бесплатную отработку. Бесплатная отработка не списывается.</p>}
       {pay && <PaySheet childId={pay} me={me} plan={rows.find((r) => r.child_id === pay)?.kind === 'trial' ? 'trial' : undefined} onClose={(ok) => { setPay(null); if (ok) reload() }} />}
@@ -259,3 +265,31 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
   )
 }
 
+
+/** Ребёнок из другой группы этого филиала пришёл на занятие — отметить «был» */
+function GuestSheet({ session, onClose }: { session: string; onClose: (ok: boolean) => void }) {
+  const [q, setQ] = useState('')
+  const { data, error } = useLoad(() => rpc<{ child_id: string; full_name: string; groups: string | null; lessons_left: number; plan_kind: string }[]>('guest_candidates', { p_session: session, p_q: q }), [q])
+  const [busy, setBusy] = useState<string | null>(null)
+  async function add(cid: string, name: string) {
+    setBusy(cid)
+    try { const r: any = await rpc('add_guest', { p_session: session, p_child: cid }); toast(r?.debt ? `${name}: отмечен, занятие в долг` : `${name}: отмечен «был»`); onClose(true) }
+    catch (e: any) { toast(e.message); setBusy(null) }
+  }
+  return (
+    <Sheet onClose={() => onClose(false)}>
+      <h2>Пришёл из другой группы</h2>
+      <p className="sub">Дети этого филиала. Занятие спишется с абонемента ребёнка как обычное.</p>
+      <input autoFocus placeholder="Фамилия или имя" value={q} onChange={(e) => setQ(e.target.value)} />
+      <Err e={error} />
+      {!data ? <Loading /> : <div className="list">
+        {data.length === 0 && <div className="row meta">Никого не нашли</div>}
+        {data.map((k) => <button className="row" key={k.child_id} disabled={!!busy} onClick={() => add(k.child_id, k.full_name)}>
+          <span className="grow"><span className="name">{k.full_name}</span><br /><span className="meta">{k.groups || 'без группы'}</span></span>
+          <Pill c={k.lessons_left > 0 ? 'p-ok' : 'p-bad'}>{k.lessons_left > 0 ? `ост. ${k.lessons_left}` : k.lessons_left < 0 ? `долг ${-k.lessons_left}` : '0'}</Pill>
+        </button>)}
+      </div>}
+      <button className="btn ghost" onClick={() => onClose(false)}>Отмена</button>
+    </Sheet>
+  )
+}
