@@ -148,6 +148,11 @@ function AssignSheet({ coach, onClose }: { coach: Person; onClose: (ok: boolean)
   const [err, setErr] = useState<string | null>(null)
   const [changed, setChanged] = useState(false)
   const [busy, setBusy] = useState<string | null>(null)
+  const [br, setBr] = useState<string>('free')
+  const branchOf = (l: string) => l.split(' · ')[0]
+  const branches = [...new Set((data || []).map((g) => branchOf(g.label)))]
+  const free = (data || []).filter((g) => !g.coach_id).length
+  const list = (data || []).filter((g) => br === 'all' ? true : br === 'free' ? !g.coach_id || g.coach_id === coach.id : branchOf(g.label) === br)
   async function take(gid: string) {
     setBusy(gid); setErr(null)
     try { await rpc('group_set_coach', { p_group: gid, p_coach: coach.id }); setChanged(true); toast('Группа передана'); reload() } catch (e: any) { setErr(e.message) }
@@ -157,8 +162,13 @@ function AssignSheet({ coach, onClose }: { coach: Person; onClose: (ok: boolean)
     <Sheet onClose={() => onClose(changed)}>
       <h2>Группы: {coach.full_name}</h2>
       <p className="sub">Нажмите «Передать», чтобы группа перешла к этому тренеру. Прошедшие занятия останутся за прежним тренером — для зарплаты.</p>
+      <div className="chips">
+        <button className="chip" aria-pressed={br === 'free'} onClick={() => setBr('free')}>Без тренера{free ? ` (${free})` : ''}</button>
+        {branches.map((b) => <button key={b} className="chip" aria-pressed={br === b} onClick={() => setBr(b)}>{b}</button>)}
+        <button className="chip" aria-pressed={br === 'all'} onClick={() => setBr('all')}>Все</button>
+      </div>
       <Err e={error || err} />
-      {!data ? <Loading /> : <div className="list">{data.map((g) => (
+      {!data ? <Loading /> : <div className="list">{list.length === 0 && <div className="row meta">{br === 'free' ? 'Все группы с тренерами — выберите филиал' : 'Групп нет'}</div>}{list.map((g) => (
         <div className="row" key={g.id}>
           <span className="grow">{g.label}<br /><span className="meta">{g.coach_name || 'без тренера'}</span></span>
           {g.coach_id === coach.id ? <Pill c="p-ok">его</Pill>
