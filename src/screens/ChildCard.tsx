@@ -27,6 +27,8 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
   const [taskDay, setTaskDay] = useState(todayISO())
   const [trialDay, setTrialDay] = useState(addDays(1))
   const [subEnd, setSubEnd] = useState('')
+  const [frUntil, setFrUntil] = useState('')
+  const [frWhy, setFrWhy] = useState('по заявлению')
   const [ed, setEd] = useState<{ full_name: string; birth_date: string; parent_name: string; phone: string; phone2: string } | null>(null)
   const sessions = useLoad(() => (mode === 'makeup' ? rpc<any[]>('sessions_on', { p_date: mkDay }) : Promise.resolve([])), [mode, mkDay])
   const allGroups = useLoad(async (): Promise<any[]> => (mode === 'move' || mode === 'add_group' ? (await supabase.from('groups').select('id,title,start_time,capacity,branches(name)').eq('active', true).order('start_time')).data || [] : []), [mode])
@@ -56,6 +58,7 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
         <Pill c={st.c}>{st.t}</Pill>
         {c.plan_kind === 'annual' && c.annual_until && <Pill c="p-acc">Годовой до {dm(c.annual_until)}</Pill>}
         {c.plan_kind === 'count' && c.sub_end && <Pill c="p-mut">Абонемент до {dm(c.sub_end)}</Pill>}
+        {c.frozen_until && c.frozen_until > todayISO() && <Pill c="p-warn">Заморожен до {dm(c.frozen_until)}</Pill>}
         <Pill c={c.cert_until && c.cert_until >= todayISO() ? 'p-ok' : 'p-bad'}>{c.cert_until ? `Справка до ${dm(c.cert_until)}` : 'Нет справки'}</Pill>
         {c.birth_date && <Pill c="p-mut">ДР {dm(c.birth_date)}.{c.birth_date.slice(0, 4)}</Pill>}
       </div>
@@ -152,7 +155,7 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
             <button className="btn sm ghost" onClick={() => { setBal(String(c.lessons_left)); setWhy(''); setMode('balance') }}>Исправить остаток</button>
             {c.plan_kind === 'count' && <button className="btn sm ghost" onClick={() => { setSubEnd(c.sub_end || todayISO()); setMode('sub_end') }}>Срок абонемента</button>}
             {c.frozen_until && c.frozen_until > todayISO() ? <button className="btn sm ghost" onClick={() => act('unfreeze', {}, 'Заморозка снята')}>Снять заморозку</button>
-              : <button className="btn sm ghost" onClick={() => setMode('freeze')}>Заморозить</button>}
+              : <button className="btn sm ghost" onClick={() => { setFrUntil(addDays(14)); setMode('freeze') }}>Заморозить</button>}
             <button className="btn sm ghost" onClick={() => { setMkDay(todayISO()); setMkKind(c.makeup_credits > 0 ? 'credit' : 'makeup'); setMode('makeup') }}>Отработка / перенос</button>
             <button className="btn sm ghost" onClick={() => setMode('add_group')}>Добавить группу</button>
             <button className="btn sm ghost" onClick={() => setMode('move')}>Перевести</button>
@@ -172,7 +175,19 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
           <label htmlFor="se">Абонемент действует до</label><input id="se" type="date" value={subEnd} onChange={(e) => setSubEnd(e.target.value)} />
           <div className="acts"><button className="btn sm" onClick={() => act('set_sub_end', { date: subEnd }, 'Срок изменён')}>Сохранить</button><button className="btn sm ghost" onClick={() => setMode(null)}>Отмена</button></div>
         </div>}
-        {mode === 'freeze' && <div className="chips">{[7, 14, 21, 30].map((d) => <button key={d} className="chip" onClick={() => act('freeze', { days: d, reason: 'по заявлению' }, `Заморожено на ${d} дн.`)}>{d} дней</button>)}</div>}
+        {mode === 'freeze' && (() => {
+          const days = frUntil ? Math.round((new Date(frUntil + 'T12:00:00').getTime() - new Date(todayISO() + 'T12:00:00').getTime()) / 864e5) : 0
+          const go = () => { if (days < 1 || days > 90) return toast('Дата — от завтра до 3 месяцев вперёд'); if (!frWhy.trim()) return toast('Укажите причину'); act('freeze', { days, reason: frWhy.trim() }, `Заморожено до ${dm(frUntil)}`) }
+          return <div className="miss" style={{ border: '1px solid var(--line)', borderRadius: 12 }}>
+            <label htmlFor="fru">Заморозить до (ребёнок вернётся в этот день)</label>
+            <input id="fru" type="date" value={frUntil} min={addDays(1)} max={addDays(90)} onChange={(e) => setFrUntil(e.target.value)} />
+            <div className="chips">{[[7, 'неделя'], [14, '2 недели'], [30, 'месяц']].map(([d, l]) => <button key={d} className="chip" aria-pressed={frUntil === addDays(d as number)} onClick={() => setFrUntil(addDays(d as number))}>{l as string}</button>)}</div>
+            <label htmlFor="frw">Причина</label>
+            <input id="frw" value={frWhy} onChange={(e) => setFrWhy(e.target.value)} placeholder="Например: болеет, справка" />
+            {days > 0 && <p className="note">{days} дн. без списаний. Остаток не меняется{c.plan_kind === 'count' && c.sub_end ? `, срок абонемента сдвинется до ${dm(addDays(days, c.sub_end))}` : ''}.</p>}
+            <div className="acts"><button className="btn sm" onClick={go}>Заморозить</button><button className="btn sm ghost" onClick={() => setMode(null)}>Отмена</button></div>
+          </div>
+        })()}
         {mode === 'leave' && <><p className="sub">{c.status === 'trial' ? 'Почему не дошёл после пробного?' : 'Причина ухода'}</p>
           <div className="chips">{(c.status === 'trial' ? LOST : LEFT).map((r) => <button key={r} className="chip" onClick={() => act('leave', { reason: r }, 'Отмечено')}>{r}</button>)}</div></>}
         {mode === 'retrial' && <div className="miss" style={{ border: '1px solid var(--line)', borderRadius: 12 }}>
