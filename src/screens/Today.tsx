@@ -12,6 +12,7 @@ type Sess = { session_id: string; branch: string; title: string; start_time: str
 export default function Today({ me }: { me: Me }) {
   const [day, setDay] = useState(todayISO())
   const [open, setOpen] = useState<{ id: string; day: string } | null>(null)
+  const [dayOff, setDayOff] = useState(false)
   const { data, error, reload } = useLoad(() => rpc<Sess[]>('sessions_on', { p_date: day }), [day])
   const office = me.role !== 'coach'
   const inbox = useLoad(() => (office ? rpc<any>('office_inbox') : Promise.resolve(null)), [office])
@@ -32,6 +33,8 @@ export default function Today({ me }: { me: Me }) {
         <h2 className="grow" style={{ textTransform: 'capitalize' }}>{dateRu(day)}</h2>
         <input type="date" value={day} onChange={(e) => setDay(e.target.value)} style={{ width: 'auto' }} aria-label="Дата" />
       </div>
+      {office && (data || []).some((s) => s.status === 'planned') && <div className="acts"><button className="btn sm ghost" onClick={() => setDayOff(true)}>Отменить весь день…</button></div>}
+      {dayOff && data && <CancelDay day={day} sessions={data} onClose={(ok) => { setDayOff(false); if (ok) { reload(); inbox.reload() } }} />}
       {office && late.length > 0 && <div className="warnbox">Не отмечено после занятия: {late.length}</div>}
       {!office && day === todayISO() && prevOpen.length > 0 && <div className="warnbox">
         <b>Вчера не отмечены занятия.</b> Можно доделать сегодня, завтра уже только через администратора.
@@ -55,6 +58,8 @@ export default function Today({ me }: { me: Me }) {
                     : s.marked >= s.expected && s.expected > 0 ? <Pill c="p-ok">Отмечено</Pill> : <Pill c="p-acc">{s.marked}/{s.expected}</Pill>}
                 </button>
                 {office && s.status === 'planned' && <SessionActions s={s} reload={reload} />}
+                {office && s.status === 'cancelled' && <div className="acts"><button className="btn sm ghost" onClick={async () => {
+                  try { await rpc('restore_session', { p_session: s.session_id }); toast('Занятие возвращено, срок абонементов вернули назад'); reload() } catch (e: any) { toast(e.message) } }}>Вернуть занятие</button></div>}
               </div>
             )
           })}
@@ -93,7 +98,7 @@ function SessionActions({ s, reload }: { s: Sess; reload: () => void }) {
       {mode === 'cancel' && (
         <Sheet onClose={() => setMode(null)}>
           <h2>Причина отмены</h2>
-          <p className="sub">Занятие ни у кого не спишется, родители получат сообщение.</p>
+          <p className="sub">Занятие ни у кого не спишется, срок абонемента у детей группы продлится на неделю, родители получат сообщение.</p>
           <div className="chips">
             {['Санитарный день', 'Бассейн закрыт', 'Праздник', 'Соревнования', 'Болезнь тренера'].map((r) => (
               <button key={r} className="chip" onClick={() => act('cancel_session', { p_session: s.session_id, p_reason: r }, 'Занятие отменено')}>{r}</button>
@@ -290,6 +295,46 @@ function GuestSheet({ session, onClose }: { session: string; onClose: (ok: boole
         </button>)}
       </div>}
       <button className="btn ghost" onClick={() => onClose(false)}>Отмена</button>
+    </Sheet>
+  )
+}
+
+const REASONS = ['Праздник', 'Санитарный день', 'Бассейн закрыт', 'Соревнования', 'Болезнь тренера']
+
+/** Отменить все занятия дня — на одном филиале или на всех */
+function CancelDay({ day, sessions, onClose }: { day: string; sessions: Sess[]; onClose: (ok: boolean) => void }) {
+  const planned = sessions.filter((s) => s.status === 'planned')
+  const branches = [...new Set(planned.map((s) => s.branch))]
+  const [br, setBr] = useState<string>('all')
+  const [why, setWhy] = useState('Праздник')
+  const [busy, setBusy] = useState(false)
+  const [err, setErr] = useState<string | null>(null)
+  const list = planned.filter((s) => br === 'all' || s.branch === br)
+  async function go() {
+    if (!why.trim()) return setErr('Укажите причину')
+    setBusy(true); setErr(null)
+    try {
+      let bid: string | null = null
+      if (br !== 'all') bid = ((await supabase.from('branches').select('id').eq('name', br).limit(1)).data || [])[0]?.id ?? null
+      const r = await rpc<{ cancelled: number; skipped: string[] }>('cancel_day', { p_date: day, p_branch: bid, p_reason: why.trim() })
+      toast(`Отменено занятий: ${r.cancelled}` + (r.skipped.length ? `. Не отменены (есть отметки): ${r.skipped.join(', ')}` : ''))
+      onClose(true)
+    } catch (e: any) { setErr(e.message); setBusy(false) }
+  }
+  return (
+    <Sheet onClose={() => onClose(false)}>
+      <h2>Отменить занятия {dm(day)}</h2>
+      <p className="sub">Ни у кого не спишется, срок абонемента у детей продлится на неделю, родители получат сообщение. Занятия, где уже есть отметки, не отменятся.</p>
+      <div><span className="lbl">Где</span><div className="chips">
+        <button className="chip" aria-pressed={br === 'all'} onClick={() => setBr('all')}>Все филиалы</button>
+        {branches.map((b) => <button key={b} className="chip" aria-pressed={br === b} onClick={() => setBr(b)}>{b}</button>)}</div></div>
+      <div><span className="lbl">Причина</span><div className="chips">
+        {REASONS.map((r) => <button key={r} className="chip" aria-pressed={why === r} onClick={() => setWhy(r)}>{r}</button>)}</div>
+        <input value={why} onChange={(e) => setWhy(e.target.value)} placeholder="Или своя причина" aria-label="Причина" style={{ marginTop: 8 }} /></div>
+      <div className="list">{list.map((s) => <div className="row" key={s.session_id}><span className="time">{hm(s.start_time)}</span><span className="grow">{s.branch} · {gshort(s.title)}<br /><span className="meta">{s.coach_name}{s.marked ? ` · уже отмечено ${s.marked} — не отменится` : ''}</span></span></div>)}</div>
+      <Err e={err} />
+      <button className="btn bad" disabled={busy || !list.length} onClick={go}>{busy ? 'Отменяем…' : `Отменить ${list.length} ${list.length === 1 ? 'занятие' : list.length < 5 ? 'занятия' : 'занятий'}`}</button>
+      <button className="btn ghost" onClick={() => onClose(false)}>Не отменять</button>
     </Sheet>
   )
 }
