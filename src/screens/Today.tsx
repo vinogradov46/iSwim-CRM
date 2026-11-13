@@ -122,7 +122,7 @@ function Inbox({ data, reload, onOpen }: { data: any; reload: () => void; onOpen
       <div className="stats">
         <div className={`stat ${data.incoming ? 'hot' : ''}`}><b>{data.incoming}</b><small>оплат EPOS разобрать</small></div>
         <div className={`stat ${data.handovers.length ? 'hot' : ''}`}><b>{data.handovers.length}</b><small>сдачи наличных</small></div>
-        <div className={`stat ${data.sick.length ? 'hot' : ''}`}><b>{data.sick.length}</b><small>ждём справку</small></div>
+        <div className={`stat ${data.sick.length ? 'hot' : ''}`}><b>{data.sick.length}</b><small>пропусков разобрать</small></div>
         <div className={`stat ${data.tasks.length ? 'hot' : ''}`}><b>{data.tasks.length}</b><small>задач</small></div>
       </div>
       {data.unmarked?.length > 0 && <>
@@ -136,15 +136,16 @@ function Inbox({ data, reload, onOpen }: { data: any; reload: () => void; onOpen
           </button>))}
         </div></>}
       {data.sick.length > 0 && <>
-        <h2>Болеют · ждём справку</h2>
-        <p className="sub">Занятие уже списано. Если принесли справку — верните занятие на остаток или дайте бесплатную отработку.</p>
+        <h2>Пропуски · разобрать {data.sick.length}</h2>
+        <p className="sub">Ребёнок не пришёл, занятие списано. Решите по каждому: справка — занятие переносится на следующий месяц и не сгорит; без справки — отработка в другой день.</p>
         <div className="list">{data.sick.map((s: any) => (
           <div className="miss" key={s.attendance_id}>
-            <button className="kidname" onClick={() => setCard(s.child_id)}><span className="name">{s.full_name}</span><br /><span className="meta">{dm(s.date)} · {s.group}</span></button>
+            <button className="kidname" onClick={() => setCard(s.child_id)}><span className="name">{s.full_name}</span><br /><span className="meta">{dm(s.date)} · {s.group}{s.phone ? ` · ${phonePretty(s.phone)}` : ''}</span></button>
             <div className="acts">
-              <button className="btn sm okb" onClick={() => act('compensate_absence', { p_attendance: s.attendance_id, p_mode: 'refund' }, 'Занятие возвращено на остаток')}>Справка → вернуть занятие</button>
-              <button className="btn sm okb" onClick={() => act('compensate_absence', { p_attendance: s.attendance_id, p_mode: 'credit' }, 'Начислена бесплатная отработка')}>Справка → в отработку</button>
-              <button className="btn sm ghost" onClick={() => act('compensate_absence', { p_attendance: s.attendance_id, p_mode: 'kept' }, 'Оставлено списанным')}>Справки нет</button>
+              <button className="btn sm okb" onClick={() => act('compensate_absence', { p_attendance: s.attendance_id, p_mode: 'transfer' }, 'Занятие перенесено на следующий месяц')}>Справка → перенос на след. месяц</button>
+              <button className="btn sm okb" onClick={() => act('compensate_absence', { p_attendance: s.attendance_id, p_mode: 'credit' }, 'Отработка начислена — запишите в другой день')}>Отработка в другой день</button>
+              <button className="btn sm ghost" onClick={() => act('compensate_absence', { p_attendance: s.attendance_id, p_mode: 'notday' }, 'Пропуск снят, дни ребёнка исправлены')}>Не ходит в этот день</button>
+              <button className="btn sm ghost" onClick={() => act('compensate_absence', { p_attendance: s.attendance_id, p_mode: 'kept' }, 'Оставлено списанным')}>Без возврата</button>
             </div>
           </div>))}
         </div></>}
@@ -215,7 +216,7 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
       {me.role !== 'coach' && canMark && <div className="warnbox">Вы правите отметки тренера. Каждое изменение попадёт в журнал</div>}
       {!canMark && s && <div className="note">{day > todayISO() ? 'Отмечать можно в день занятия.' : 'Тренер отмечает в день занятия или на следующий день. Позже исправляет администратор.'}</div>}
       <Err e={error} />
-      {coachAuto && canMark && <div className="okbox">Отмечайте только тех, кто пришёл. Остальным программа сама поставит «не был» после того, как закроется отметка (занятие спишется). Возврат и отработку делает администратор.</div>}
+      {coachAuto && canMark && <div className="okbox">Отмечайте только тех, кто пришёл. Остальных программа сама передаст администратору: перенос или отработку решает она.</div>}
       {!coachAuto && canMark && s?.ended && unmarked > 0 && rows.some((c) => c.mark) && <div className="warnbox">Не отмечено: {unmarked}. Отметьте каждого — «был» или «не был», иначе пропуск не учтётся.{me.role === 'coach' && day < todayISO() ? ' Сегодня последний день, когда можно отметить.' : ''}</div>}
       {canMark && unmarked > 0 && <button className="btn okb" onClick={allHere}>Все были ({unmarked}), потом исправить отсутствующих</button>}
       {!data ? <Loading /> : (
