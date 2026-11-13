@@ -311,6 +311,7 @@ function CancelDay({ day, sessions, onClose }: { day: string; sessions: Sess[]; 
   const [busy, setBusy] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const list = planned.filter((s) => br === 'all' || s.branch === br)
+  const n = list.filter((s) => !s.marked).length
   async function go() {
     if (!why.trim()) return setErr('Укажите причину')
     setBusy(true); setErr(null)
@@ -334,7 +335,7 @@ function CancelDay({ day, sessions, onClose }: { day: string; sessions: Sess[]; 
         <input value={why} onChange={(e) => setWhy(e.target.value)} placeholder="Или своя причина" aria-label="Причина" style={{ marginTop: 8 }} /></div>
       <div className="list">{list.map((s) => <div className="row" key={s.session_id}><span className="time">{hm(s.start_time)}</span><span className="grow">{s.branch} · {gshort(s.title)}<br /><span className="meta">{s.coach_name}{s.marked ? ` · уже отмечено ${s.marked} — не отменится` : ''}</span></span></div>)}</div>
       <Err e={err} />
-      <button className="btn bad" disabled={busy || !list.length} onClick={go}>{busy ? 'Отменяем…' : `Отменить ${list.length} ${list.length === 1 ? 'занятие' : list.length < 5 ? 'занятия' : 'занятий'}`}</button>
+      <button className="btn bad" disabled={busy || !n} onClick={go}>{busy ? 'Отменяем…' : `Отменить ${n} ${n === 1 ? 'занятие' : n < 5 ? 'занятия' : 'занятий'}`}</button>
       <button className="btn ghost" onClick={() => onClose(false)}>Не отменять</button>
     </Sheet>
   )
