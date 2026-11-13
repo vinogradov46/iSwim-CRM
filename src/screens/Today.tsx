@@ -263,7 +263,7 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
       )}
       {canMark && <button className="btn ghost" onClick={() => setGuest(true)}>+ Пришёл ребёнок из другой группы</button>}
       {guest && <GuestSheet session={id} onClose={(ok) => { setGuest(false); if (ok) reload() }} />}
-      {auto ? <p className="note">«Был» списывает занятие. Кого не отметили — через сутки после окна отметки программа ставит «не был» и тоже списывает. Если принесут справку или договорятся об отработке, администратор вернёт занятие в карточке ребёнка. Бесплатная отработка не списывается.</p> :
+      {auto ? <p className="note">«Был» списывает занятие. Кого не отметили — через день программа поставит «не был» и передаст администратору: она решит, перенос по справке или отработка в другой день. Бесплатная отработка не списывается.</p> :
       <p className="note">«Был» и «Пропуск» списывают занятие. «Болеет — будет справка» тоже списывает, но попадает администратору: когда принесут справку, он вернёт занятие или даст бесплатную отработку. Бесплатная отработка не списывается.</p>}
       {pay && <PaySheet childId={pay} me={me} plan={rows.find((r) => r.child_id === pay)?.kind === 'trial' ? 'trial' : undefined} onClose={(ok) => { setPay(null); if (ok) reload() }} />}
       {card && <ChildCard id={card} onClose={() => { setCard(null); reload() }} />}
