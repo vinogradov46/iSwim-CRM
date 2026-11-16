@@ -135,20 +135,7 @@ function Inbox({ data, reload, onOpen }: { data: any; reload: () => void; onOpen
             <Pill c="p-bad">Отметить</Pill>
           </button>))}
         </div></>}
-      {data.sick.length > 0 && <>
-        <h2>Пропуски · разобрать {data.sick.length}</h2>
-        <p className="sub">Ребёнок не пришёл, занятие списано. Решите по каждому: справка — занятие переносится на следующий месяц и не сгорит; без справки — отработка в другой день.</p>
-        <div className="list">{data.sick.map((s: any) => (
-          <div className="miss" key={s.attendance_id}>
-            <button className="kidname" onClick={() => setCard(s.child_id)}><span className="name">{s.full_name}</span><br /><span className="meta">{dm(s.date)} · {s.group}{s.phone ? ` · ${phonePretty(s.phone)}` : ''}</span></button>
-            <div className="acts">
-              <button className="btn sm okb" onClick={() => act('compensate_absence', { p_attendance: s.attendance_id, p_mode: 'transfer' }, 'Занятие перенесено на следующий месяц')}>Справка → перенос на след. месяц</button>
-              <button className="btn sm okb" onClick={() => act('compensate_absence', { p_attendance: s.attendance_id, p_mode: 'credit' }, 'Отработка начислена — запишите в другой день')}>Отработка в другой день</button>
-              <button className="btn sm ghost" onClick={() => act('compensate_absence', { p_attendance: s.attendance_id, p_mode: 'notday' }, 'Пропуск снят, дни ребёнка исправлены')}>Не ходит в этот день</button>
-              <button className="btn sm ghost" onClick={() => act('compensate_absence', { p_attendance: s.attendance_id, p_mode: 'kept' }, 'Оставлено списанным')}>Без возврата</button>
-            </div>
-          </div>))}
-        </div></>}
+      {data.sick.length > 0 && <Absences items={data.sick} reload={reload} onCard={setCard} />}
       {data.handovers.length > 0 && <>
         <h2>Тренеры сдают наличные</h2>
         <div className="list">{data.handovers.map((h: any) => (
@@ -339,4 +326,53 @@ function CancelDay({ day, sessions, onClose }: { day: string; sessions: Sess[]; 
       <button className="btn ghost" onClick={() => onClose(false)}>Не отменять</button>
     </Sheet>
   )
+}
+
+/** Пропуски на разбор: фильтр по филиалу, группировка по занятию, решения пачкой */
+function Absences({ items, reload, onCard }: { items: any[]; reload: () => void; onCard: (id: string) => void }) {
+  const [br, setBr] = useState('all')
+  const [busy, setBusy] = useState<string | null>(null)
+  const counts = new Map<string, number>()
+  items.forEach((s) => counts.set(s.branch, (counts.get(s.branch) || 0) + 1))
+  const list = items.filter((s) => br === 'all' || s.branch === br)
+  const groups = new Map<string, any[]>()
+  list.forEach((s) => { const k = s.session_id || s.date + s.group; groups.set(k, [...(groups.get(k) || []), s]) })
+  async function bulk(ids: string[], mode: string, msg: string, key: string) {
+    setBusy(key)
+    try {
+      const r = await rpc<{ ok: number; errors: string[] }>('compensate_absence_bulk', { p_ids: ids, p_mode: mode })
+      toast(`${msg}: ${r.ok}` + (r.errors.length ? `. Не получилось: ${r.errors.join('; ')}` : ''))
+      reload()
+    } catch (e: any) { toast(e.message) } finally { setBusy(null) }
+  }
+  const one = (id: string, mode: string, msg: string) => bulk([id], mode, msg, id)
+  return <>
+    <h2>Пропуски · разобрать {items.length}</h2>
+    <p className="sub">Ребёнок не пришёл, занятие списано. Справка — перенос на следующий месяц (не сгорит); без справки — отработка в другой день. Ходит раз в неделю — «Не ходит в этот день», и дни запомнятся.</p>
+    {counts.size > 1 && <div className="chips">
+      <button className="chip" aria-pressed={br === 'all'} onClick={() => setBr('all')}>Все · {items.length}</button>
+      {[...counts.entries()].sort((x, y) => y[1] - x[1]).map(([b, n]) => <button key={b} className="chip" aria-pressed={br === b} onClick={() => setBr(b)}>{b} · {n}</button>)}
+    </div>}
+    {[...groups.entries()].map(([k, arr]) => {
+      const ids = arr.map((s) => s.attendance_id)
+      return <div className="list" key={k}>
+        <div className="row" style={{ flexWrap: 'wrap', gap: 8 }}>
+          <span className="grow"><span className="name">{dm(arr[0].date)} · {arr[0].group}</span><br /><span className="meta">не пришли: {arr.length}</span></span>
+          {arr.length > 1 && <div className="acts" style={{ width: '100%' }}>
+            {!arr[0].one_day && <button className="btn sm ghost" disabled={busy === k} onClick={() => bulk(ids, 'notday', 'Сняты пропуски, дни запомнены', k)}>Всем: не ходят в этот день</button>}
+            <button className="btn sm ghost" disabled={busy === k} onClick={() => bulk(ids, 'kept', 'Оставлено списанным', k)}>Всем: без возврата</button>
+          </div>}
+        </div>
+        {arr.map((s) => <div className="miss" key={s.attendance_id}>
+          <button className="kidname" onClick={() => onCard(s.child_id)}><span className="name">{s.full_name}</span><br /><span className="meta">{s.phone ? phonePretty(s.phone) : ''}{s.auto ? '' : ' · отметил тренер'}</span></button>
+          <div className="acts">
+            <button className="btn sm okb" disabled={busy === s.attendance_id} onClick={() => one(s.attendance_id, 'transfer', 'Перенесено на следующий месяц')}>Справка → перенос</button>
+            <button className="btn sm okb" disabled={busy === s.attendance_id} onClick={() => one(s.attendance_id, 'credit', 'Отработка начислена')}>Отработка</button>
+            {!s.one_day && <button className="btn sm ghost" disabled={busy === s.attendance_id} onClick={() => one(s.attendance_id, 'notday', 'Пропуск снят, дни исправлены')}>Не ходит в этот день</button>}
+            <button className="btn sm ghost" disabled={busy === s.attendance_id} onClick={() => one(s.attendance_id, 'kept', 'Оставлено списанным')}>Без возврата</button>
+          </div>
+        </div>)}
+      </div>
+    })}
+  </>
 }

@@ -8,6 +8,7 @@ import Cash from './screens/Cash'
 import { Salary } from './screens/Director'
 import Staff from './screens/Staff'
 import Indiv from './screens/Indiv'
+import { TgButton } from './screens/Tg'
 
 const ROLE: Record<string, string> = { director: 'Директор', admin: 'Администратор', coach: 'Тренер' }
 const TABS: Record<string, [string, string][]> = {
@@ -52,6 +53,7 @@ export default function App() {
         <div className="me mob-only">
           <div className="ava">{me.full_name.split(' ').map((w) => w[0]).join('').slice(0, 2)}</div>
           <div className="grow"><div className="name">{me.full_name}</div><div className="meta">{ROLE[me.role]}</div></div>
+          <TgButton />
           <button className="btn sm ghost" onClick={() => supabase.auth.signOut()}>Выйти</button>
         </div>
         {body}
@@ -59,7 +61,7 @@ export default function App() {
       <nav className="tabs">
         <div className="side-brand">i<span>Swim</span> CRM</div>
         <div className="side-me"><div className="name">{me.full_name}</div><div className="meta">{ROLE[me.role]}</div>
-          <button className="btn sm ghost" onClick={() => supabase.auth.signOut()}>Выйти</button></div>
+          <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}><TgButton /><button className="btn sm ghost" onClick={() => supabase.auth.signOut()}>Выйти</button></div></div>
         <div className="tabs-in" style={{ gridTemplateColumns: `repeat(${tabs.length},1fr)` }}>
           {tabs.map(([id, l]) => (
             <button key={id} className="tab" aria-current={tab === id ? 'page' : undefined} onClick={() => { setTab(id); window.scrollTo(0, 0) }}>{l}</button>

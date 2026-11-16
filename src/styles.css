@@ -54,6 +54,7 @@ div.row{cursor:default}
 .btn{border:0;background:var(--accent);color:var(--accent-ink);font:600 15px var(--body);padding:13px 16px;border-radius:12px;cursor:pointer;width:100%}
 .btn.ghost{background:var(--surface);color:var(--accent);border:1px solid var(--line)}
 .btn.sm{width:auto;padding:7px 12px;font-size:13px;border-radius:9px}
+a.btn{text-decoration:none;display:inline-block;text-align:center}
 .btn.bad{background:var(--bad);color:#fff}
 .btn.okb{background:var(--ok);color:#fff}
 .btn:disabled{opacity:.45;cursor:not-allowed}

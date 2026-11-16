@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { TgBlock } from './Tg'
 import { rpc, money, phonePretty } from '../lib'
 import { useLoad, Loading, Err, Sheet, Pill, toast } from '../ui'
 import { Journal } from './Director'
@@ -88,6 +89,7 @@ function PersonSheet({ p, onEdit, onClose }: { p: Person; onEdit: () => void; on
         {!p.phone && <p className="note">Чтобы выдать доступ, сначала укажите телефон: «Изменить».</p>}
       </>}
       <Err e={err} />
+      {p.active && p.has_login && <TgBlock staffId={p.id} />}
       {p.active && p.role === 'coach' && <IndivBlock p={p} onSaved={() => onClose(true)} />}
       {p.active && p.role === 'coach' && <button className="btn ghost" onClick={() => setAssign(true)}>Назначить группы</button>}
       {p.role !== 'director' && <button className="btn ghost" onClick={onEdit}>Изменить данные и ставку</button>}
