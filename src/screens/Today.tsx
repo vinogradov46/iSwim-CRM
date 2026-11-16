@@ -205,6 +205,7 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
       <Err e={error} />
       {coachAuto && canMark && <div className="okbox">Отмечайте только тех, кто пришёл. Остальных программа сама передаст администратору: перенос или отработку решает она.</div>}
       {!coachAuto && canMark && s?.ended && unmarked > 0 && rows.some((c) => c.mark) && <div className="warnbox">Не отмечено: {unmarked}. Отметьте каждого — «был» или «не был», иначе пропуск не учтётся.{me.role === 'coach' && day < todayISO() ? ' Сегодня последний день, когда можно отметить.' : ''}</div>}
+      {canMark && <button className="btn ghost" onClick={() => setGuest(true)}>+ Пришёл ребёнок не из этой группы (отработка)</button>}
       {canMark && unmarked > 0 && <button className="btn okb" onClick={allHere}>Все были ({unmarked}), потом исправить отсутствующих</button>}
       {!data ? <Loading /> : (
         <div className="list">
@@ -248,7 +249,7 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
           {rows.length === 0 && <div className="row meta">В группе пока никого</div>}
         </div>
       )}
-      {canMark && <button className="btn ghost" onClick={() => setGuest(true)}>+ Пришёл ребёнок из другой группы</button>}
+      {canMark && rows.length > 6 && <button className="btn ghost" onClick={() => setGuest(true)}>+ Пришёл ребёнок не из этой группы (отработка)</button>}
       {guest && <GuestSheet session={id} onClose={(ok) => { setGuest(false); if (ok) reload() }} />}
       {auto ? <p className="note">«Был» списывает занятие. Кого не отметили — через день программа поставит «не был» и передаст администратору: она решит, перенос по справке или отработка в другой день. Бесплатная отработка не списывается.</p> :
       <p className="note">«Был» и «Пропуск» списывают занятие. «Болеет — будет справка» тоже списывает, но попадает администратору: когда принесут справку, он вернёт занятие или даст бесплатную отработку. Бесплатная отработка не списывается.</p>}
@@ -262,7 +263,7 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
 /** Ребёнок из другой группы этого филиала пришёл на занятие — отметить «был» */
 function GuestSheet({ session, onClose }: { session: string; onClose: (ok: boolean) => void }) {
   const [q, setQ] = useState('')
-  const { data, error } = useLoad(() => rpc<{ child_id: string; full_name: string; groups: string | null; lessons_left: number; plan_kind: string }[]>('guest_candidates', { p_session: session, p_q: q }), [q])
+  const { data, error } = useLoad(() => rpc<{ child_id: string; full_name: string; groups: string | null; lessons_left: number; plan_kind: string; makeup_credits: number; other_branch: boolean }[]>('guest_candidates', { p_session: session, p_q: q }), [q])
   const [busy, setBusy] = useState<string | null>(null)
   async function add(cid: string, name: string) {
     setBusy(cid)
@@ -271,14 +272,15 @@ function GuestSheet({ session, onClose }: { session: string; onClose: (ok: boole
   }
   return (
     <Sheet onClose={() => onClose(false)}>
-      <h2>Пришёл из другой группы</h2>
-      <p className="sub">Дети этого филиала. Занятие спишется с абонемента ребёнка как обычное.</p>
+      <h2>Пришёл ребёнок не из этой группы</h2>
+      <p className="sub">Сначала показаны дети этого филиала. Ребёнка с другого филиала найдите по фамилии (от 3 букв). Если у ребёнка есть бесплатная отработка — занятие не спишется, иначе спишется с абонемента как обычное.</p>
       <input autoFocus placeholder="Фамилия или имя" value={q} onChange={(e) => setQ(e.target.value)} />
       <Err e={error} />
       {!data ? <Loading /> : <div className="list">
         {data.length === 0 && <div className="row meta">Никого не нашли</div>}
         {data.map((k) => <button className="row" key={k.child_id} disabled={!!busy} onClick={() => add(k.child_id, k.full_name)}>
           <span className="grow"><span className="name">{k.full_name}</span><br /><span className="meta">{k.groups || 'без группы'}</span></span>
+          {k.makeup_credits > 0 && <Pill c="p-acc">отработка · бесплатно</Pill>}
           <Pill c={k.lessons_left > 0 ? 'p-ok' : 'p-bad'}>{k.lessons_left > 0 ? `ост. ${k.lessons_left}` : k.lessons_left < 0 ? `долг ${-k.lessons_left}` : '0'}</Pill>
         </button>)}
       </div>}
