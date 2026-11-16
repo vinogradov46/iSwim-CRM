@@ -18,12 +18,10 @@ export default function Today({ me }: { me: Me }) {
   const inbox = useLoad(() => (office ? rpc<any>('office_inbox') : Promise.resolve(null)), [office])
   const yday = addDays(todayISO(), -1)
   const prev = useLoad(() => (office ? Promise.resolve([] as Sess[]) : rpc<Sess[]>('sessions_on', { p_date: yday })), [office])
-  const brs = useLoad(async () => (office ? [] : (await supabase.from('branches').select('name,auto_absent_from')).data || []), [office])
-  const isAuto = (s: Sess) => (brs.data || []).some((b: any) => b.name === s.branch && b.auto_absent_from && b.auto_absent_from <= yday)
-  const prevOpen = (prev.data || []).filter((s) => s.status === 'planned' && s.can_mark && s.marked < s.expected && (s.marked === 0 || !isAuto(s)))
+  const prevOpen = (prev.data || []).filter((s) => s.status === 'planned' && s.can_mark && s.expected > 0 && s.marked === 0)
 
   if (open) return <Session id={open.id} day={open.day} me={me} onBack={() => { setOpen(null); reload(); inbox.reload(); prev.reload() }} />
-  const late = (data || []).filter((s) => s.status === 'planned' && s.ended && s.marked < s.expected)
+  const late = (data || []).filter((s) => s.status === 'planned' && s.ended && s.expected > 0 && s.marked === 0)
   return (
     <div className={office ? 'split' : 'col'}>
       {office && <section className="col"><Inbox data={inbox.data} reload={() => { inbox.reload(); reload() }} onOpen={(id, d) => setOpen({ id, day: d })} />
@@ -39,7 +37,7 @@ export default function Today({ me }: { me: Me }) {
       {!office && day === todayISO() && prevOpen.length > 0 && <div className="warnbox">
         <b>Вчера не отмечены занятия.</b> Можно доделать сегодня, завтра уже только через администратора.
         <div className="list" style={{ marginTop: 8 }}>{prevOpen.map((s) => <button className="row" key={s.session_id} onClick={() => setOpen({ id: s.session_id, day: yday })}>
-          <span className="time">{hm(s.start_time)}</span><span className="grow"><span className="name">{s.branch} · {gshort(s.title)}</span><br /><span className="meta">отмечено {s.marked} из {s.expected}</span></span><Pill c="p-warn">Отметить</Pill></button>)}</div>
+          <span className="time">{hm(s.start_time)}</span><span className="grow"><span className="name">{s.branch} · {gshort(s.title)}</span><br /><span className="meta">никто не отмечен</span></span><Pill c="p-warn">Отметить</Pill></button>)}</div>
       </div>}
       <Err e={error} />
       {!data ? <Loading /> : (
@@ -55,7 +53,7 @@ export default function Today({ me }: { me: Me }) {
                     <span className="meta">{s.substitute_name ? `${s.substitute_name} (замена за ${s.coach_name})` : s.coach_name || 'тренер не назначен'}
                       {s.status === 'cancelled' ? ` · отменено: ${s.cancel_reason}` : ` · ${s.expected} детей${s.trials ? ` · пробных ${s.trials}` : ''}`}</span></span>
                   {s.status === 'cancelled' ? <Pill c="p-mut">Отменено</Pill> : isLate ? <Pill c="p-bad">Не отмечено</Pill>
-                    : s.marked >= s.expected && s.expected > 0 ? <Pill c="p-ok">Отмечено</Pill> : <Pill c="p-acc">{s.marked}/{s.expected}</Pill>}
+                    : s.marked > 0 ? <Pill c="p-ok">Отмечено · {s.marked}</Pill> : <Pill c="p-acc">0/{s.expected}</Pill>}
                 </button>
                 {office && s.status === 'planned' && <SessionActions s={s} reload={reload} />}
                 {office && s.status === 'cancelled' && <div className="acts"><button className="btn sm ghost" onClick={async () => {
