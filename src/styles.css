@@ -117,6 +117,22 @@ tfoot td{font-weight:700}
 label,.lbl{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppercase;letter-spacing:.06em;display:block;margin-bottom:6px}
 .toast{position:fixed;left:50%;bottom:calc(84px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--fg);color:var(--bg);padding:10px 16px;border-radius:10px;font-weight:600;font-size:14px;z-index:30;max-width:90vw;text-align:center}
 .hist{font-size:13px;display:flex;flex-direction:column;gap:4px}
+.cal{display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin:8px 0 6px}
+.cal-h{font-size:11px;color:var(--muted);text-align:center;font-weight:600}
+.cal-d{position:relative;aspect-ratio:1/1;max-height:44px;border:1px solid transparent;border-radius:9px;background:none;color:var(--muted);font:600 13px var(--body);cursor:default;padding:0}
+.cal-d:not(:disabled){cursor:pointer}
+.cal-d.ok{background:var(--ok-soft);color:var(--ok)} .cal-d.bad{background:var(--bad-soft);color:var(--bad)}
+.cal-d.warn{background:var(--warn-soft);color:var(--warn)} .cal-d.plan{border-color:var(--line);color:var(--fg)}
+.cal-d.mut{background:var(--surface-2);color:var(--muted);text-decoration:line-through}
+.cal-d.today{box-shadow:inset 0 0 0 2px var(--accent)}
+.cal-d[aria-pressed="true"]{outline:2px solid var(--fg);outline-offset:1px}
+.cal-d i{position:absolute;top:2px;right:4px;font-size:9px;font-style:normal;opacity:.8}
+.cal-legend{display:flex;flex-wrap:wrap;gap:6px 12px;font-size:12px;margin-bottom:8px}
+.cal-legend span::before{content:"";display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;vertical-align:-1px;background:var(--line)}
+.cal-legend .ok::before,.cal-t.ok{color:var(--ok)} .cal-legend .ok::before{background:var(--ok)}
+.cal-legend .bad::before{background:var(--bad)} .cal-t.bad{color:var(--bad)}
+.cal-legend .warn::before{background:var(--warn)} .cal-t.warn{color:var(--warn)}
+.cal-legend .plan::before{background:none;border:1px solid var(--muted)} .cal-legend .mut::before{background:var(--surface-2);border:1px solid var(--line)}
 .hist div{display:flex;justify-content:space-between;gap:10px;border-bottom:1px solid var(--line);padding-bottom:4px}
 .hist div span:last-child{text-align:right}
 .warnbox{background:var(--warn-soft);color:var(--warn);border-radius:10px;padding:10px 12px;font-size:13.5px;font-weight:600}

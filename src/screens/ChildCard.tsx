@@ -3,6 +3,7 @@ import { rpc, supabase, dm, hm, gshort, gname, money, phonePretty, phoneE164, ba
 import { Sheet, useLoad, Loading, Err, Pill, toast } from '../ui'
 import PaySheet from './PaySheet'
 import TrialDates from './TrialDates'
+import AttCalendar from './AttCalendar'
 
 const LEFT = ['Переезд', 'Дорого', 'Неудобное время', 'Не понравилось', 'Болезнь', 'Другое']
 const LOST = ['Не понравилось', 'Дорого', 'Неудобное время', 'Не отвечает', 'Передумали', 'Другое']
@@ -13,7 +14,6 @@ const WD = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 export default function ChildCard({ id, onClose, me }: { id: string; onClose: () => void; me?: Me }) {
   const { data, error, reload } = useLoad(() => rpc<any>('child_card', { p_child: id }), [id])
   const whoami = useLoad(() => (me ? Promise.resolve([me]) : rpc<Me[]>('whoami')), [])
-  const skills = useLoad(async () => (await supabase.from('skill_levels').select('*').order('sort')).data || [], [])
   const [mode, setMode] = useState<string | null>(null)
   const [notes, setNotes] = useState('')
   const [bal, setBal] = useState('')
@@ -102,10 +102,7 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
           {c.cert_until && <button className="btn sm ghost" onClick={() => call('set_certificate', { p_child: id, p_until: null }, 'Отмечено: справки нет')}>Справки нет</button>}
         </div>}
       </div>
-      {skills.data && skills.data.length > 0 && <div><span className="lbl">Навыки · {data.skills.length} из {skills.data.length}</span>
-        <div className="skills">{skills.data.map((s: any) => (
-          <button key={s.id} className="skill" aria-pressed={data.skills.includes(s.id)} onClick={async () => { try { await rpc('toggle_skill', { p_child: id, p_skill: s.id }); reload() } catch (e: any) { toast(e.message) } }}>
-            <span className="box">{data.skills.includes(s.id) ? '✓' : ''}</span>{s.name}</button>))}</div></div>}
+      <AttCalendar childId={id} />
       <div><span className="lbl">{office ? 'Оплаты' : 'Оплаты, принятые вами'}</span>
         <div className="hist">{data.payments.length ? data.payments.map((p: any) => <div key={p.id}>
           <span>{dm(p.paid_at.slice(0, 10))} · {p.plan_type === 'count' ? `${p.lessons} зан.` : PLAN[p.plan_type] || p.plan_type}{p.cancelled ? ' · отменена' : ''}</span>
