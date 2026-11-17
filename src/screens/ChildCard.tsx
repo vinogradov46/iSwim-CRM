@@ -59,7 +59,7 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
         {c.plan_kind === 'annual' && c.annual_until && <Pill c="p-acc">Годовой до {dm(c.annual_until)}</Pill>}
         {c.plan_kind === 'count' && c.sub_end && <Pill c="p-mut">Абонемент до {dm(c.sub_end)}</Pill>}
         {c.frozen_until && c.frozen_until > todayISO() && <Pill c="p-warn">Заморожен до {dm(c.frozen_until)}</Pill>}
-        <Pill c={c.cert_until && c.cert_until >= todayISO() ? 'p-ok' : 'p-bad'}>{c.cert_until ? `Справка до ${dm(c.cert_until)}` : 'Нет справки'}</Pill>
+        <Pill c={c.cert_until && c.cert_until >= todayISO() ? 'p-ok' : 'p-bad'}>{c.cert_until ? (c.cert_until >= '2090' ? 'Справка есть' : `Справка до ${dm(c.cert_until)}`) : 'Нет справки'}</Pill>
         {c.birth_date && <Pill c="p-mut">ДР {dm(c.birth_date)}.{c.birth_date.slice(0, 4)}</Pill>}
       </div>
       <div><span className="lbl">Группы</span>
@@ -89,20 +89,14 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
         </> : <div style={{ display: 'flex', gap: 8 }}><span className="grow" style={c.notes ? { color: 'var(--warn)', fontWeight: 600 } : {}}>{c.notes || 'Ничего не указано'}</span><button className="btn sm ghost" onClick={() => { setNotes(c.notes || ''); setMode('notes') }}>Изменить</button></div>}
       </div>
       <div><span className="lbl">Медицинская справка</span>
-        {(() => { const ok = c.cert_until && c.cert_until >= todayISO(); const soon = ok && c.cert_until <= addDays(14)
-          return <div className={ok ? (soon ? 'warnbox' : 'okbox') : 'errbox'}>{ok ? (soon ? `Справка заканчивается ${dm(c.cert_until)} — напомните родителям принести новую` : `Справка есть, действует до ${dm(c.cert_until)}.${c.cert_until.slice(0, 4)}`) : c.cert_until ? `Справка просрочена с ${dm(c.cert_until)}. Ребёнок занимается без справки — напомните родителям` : 'Справки нет. Ребёнок занимается без справки — напомните родителям'}</div> })()}
-        {mode === 'certset' ? <div className="miss" style={{ border: '1px solid var(--line)', borderRadius: 12, marginTop: 6 }}>
-          <span className="lbl">Справка принесена. Действует:</span>
-          <div className="chips">{[[90, '3 месяца'], [180, '6 месяцев'], [365, '1 год']].map(([d, l]) => <button key={d} className="chip" onClick={() => call('set_certificate', { p_child: id, p_until: addDays(d as number) }, 'Справка отмечена')}>{l as string}</button>)}</div>
-          <label htmlFor="cu">или до даты (как написано в справке)</label>
-          <input id="cu" type="date" min={todayISO()} value={subEnd} onChange={(e) => setSubEnd(e.target.value)} />
-          <div className="acts"><button className="btn sm" disabled={!subEnd} onClick={() => call('set_certificate', { p_child: id, p_until: subEnd }, 'Справка отмечена')}>Сохранить дату</button><button className="btn sm ghost" onClick={() => setMode(null)}>Отмена</button></div>
-        </div> : <div className="acts" style={{ marginTop: 6 }}>
-          <button className="btn sm okb" onClick={() => { setSubEnd(''); setMode('certset') }}>Принёс справку</button>
-          {c.cert_until && <button className="btn sm ghost" onClick={() => call('set_certificate', { p_child: id, p_until: null }, 'Отмечено: справки нет')}>Справки нет</button>}
-        </div>}
+        {(() => { const ok = c.cert_until && c.cert_until >= todayISO(); const forever = ok && c.cert_until >= '2090'; const soon = ok && !forever && c.cert_until <= addDays(14)
+          return <div className={ok ? (soon ? 'warnbox' : 'okbox') : 'errbox'}>{forever ? 'Справка есть' : ok ? (soon ? `Справка заканчивается ${dm(c.cert_until)} — напомните родителям принести новую` : `Справка есть, действует до ${dm(c.cert_until)}.${c.cert_until.slice(0, 4)}`) : c.cert_until ? `Справка просрочена с ${dm(c.cert_until)}. Напомните родителям` : 'Справки нет. Напомните родителям'}</div> })()}
+        <div className="acts" style={{ marginTop: 6 }}>
+          <button className="btn sm okb" aria-pressed={c.cert_until >= '2090'} onClick={() => call('set_certificate', { p_child: id, p_until: '2099-12-31' }, 'Отмечено: справка есть')}>Справка есть</button>
+          <button className="btn sm ghost" onClick={() => call('set_certificate', { p_child: id, p_until: null }, 'Отмечено: справки нет')}>Справки нет</button>
+        </div>
       </div>
-      <AttCalendar childId={id} />
+      <AttCalendar childId={id} office={office} onChanged={reload} />
       <div><span className="lbl">{office ? 'Оплаты' : 'Оплаты, принятые вами'}</span>
         <div className="hist">{data.payments.length ? data.payments.map((p: any) => <div key={p.id}>
           <span>{dm(p.paid_at.slice(0, 10))} · {p.plan_type === 'count' ? `${p.lessons} зан.` : PLAN[p.plan_type] || p.plan_type}{p.cancelled ? ' · отменена' : ''}</span>

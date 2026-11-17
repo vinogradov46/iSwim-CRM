@@ -164,6 +164,7 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
   const [card, setCard] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [guest, setGuest] = useState(false)
+  const [showNoSub, setShowNoSub] = useState(false)
   const s = sess.data
   const canMark = !!s?.can_mark
   const br = useLoad(async () => (await supabase.from('branches').select('name,auto_absent_from')).data || [], [])
@@ -192,8 +193,12 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
     try { const r: any = await rpc('mark_all_present', { p_session: id }); toast(r.unpaid.length ? `Отмечено ${r.marked}. Без оплаты: ${r.unpaid.join(', ')}` : `Отмечено ${r.marked}. Исправьте отсутствующих`); reload() }
     catch (e: any) { toast(e.message) }
   }
-  const rows = data || []
-  const unmarked = rows.filter((c) => c.kind === 'group' && !c.mark && !(c.frozen_until && c.frozen_until > day)).length
+  const all = data || []
+  // без абонемента (остаток ≤ 0) и ещё не отмечен — в списке не показываем
+  const noSub = (c: R) => c.kind === 'group' && c.plan_kind === 'count' && c.lessons_left <= 0 && !c.mark
+  const hidden = all.filter(noSub)
+  const rows = showNoSub ? all : all.filter((c) => !noSub(c))
+  const unmarked = rows.filter((c) => c.kind === 'group' && !c.mark && !noSub(c) && !(c.frozen_until && c.frozen_until > day)).length
   return (
     <div className="col narrow">
       <button className="back" onClick={onBack}>← Назад</button>
@@ -224,7 +229,7 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
                   {bday && <Pill c="p-acc">День рождения</Pill>}
                   {c.kind !== 'trial' && (!c.cert_until || c.cert_until < day ? <Pill c="p-bad">Нет справки</Pill>
-                    : c.cert_until <= addDays(day, 14) ? <Pill c="p-warn">Справка до {dm(c.cert_until)}</Pill> : null)}
+                    : c.cert_until >= '2090' ? null : c.cert_until <= addDays(day, 14) ? <Pill c="p-warn">Справка до {dm(c.cert_until)}</Pill> : null)}
                   <Pill c={st.c}>{st.t}</Pill>
                   {!frozen && <button className="btn sm ghost" onClick={() => setPay(c.child_id)}>+ Оплата</button>}
                 </div>
@@ -244,9 +249,10 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
               </div>
             )
           })}
-          {rows.length === 0 && <div className="row meta">В группе пока никого</div>}
+          {rows.length === 0 && <div className="row meta">{hidden.length ? 'Все дети группы без абонемента' : 'В группе пока никого'}</div>}
         </div>
       )}
+      {hidden.length > 0 && <button className="btn sm ghost" onClick={() => setShowNoSub(!showNoSub)}>{showNoSub ? 'Скрыть детей без абонемента' : `Без абонемента: ${hidden.length} — показать`}</button>}
       {canMark && rows.length > 6 && <button className="btn ghost" onClick={() => setGuest(true)}>+ Пришёл ребёнок не из этой группы (отработка)</button>}
       {guest && <GuestSheet session={id} onClose={(ok) => { setGuest(false); if (ok) reload() }} />}
       {auto ? <p className="note">«Был» списывает занятие. Кого не отметили — через день программа поставит «не был» и передаст администратору: она решит, перенос по справке или отработка в другой день. Бесплатная отработка не списывается.</p> :

@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { rpc, dm, hm, todayISO } from '../lib'
-import { useLoad, Loading, Err } from '../ui'
+import { useLoad, Loading, Err, toast } from '../ui'
 
 type Row = { session_id: string; date: string; start_time: string; grp: string; kind: 'group' | 'makeup' | 'guest'; mark: 'present' | 'absent' | null
   auto: boolean; charged: boolean; sick_status: string | null; absence_reason: string | null; marked_by: string | null; marked_at: string | null
@@ -21,11 +21,12 @@ const shift = (m: string, n: number) => { const d = new Date(m + '-15T12:00:00')
 const when = (ts: string) => { const d = new Date(ts); return `${String(d.getDate()).padStart(2, '0')}.${String(d.getMonth() + 1).padStart(2, '0')} ${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}` }
 
 /** Календарь посещений ребёнка за месяц */
-export default function AttCalendar({ childId }: { childId: string }) {
+export default function AttCalendar({ childId, office, onChanged }: { childId: string; office?: boolean; onChanged?: () => void }) {
   const today = todayISO()
   const [month, setMonth] = useState(today.slice(0, 7))
   const [open, setOpen] = useState<string | null>(null)
-  const { data, error } = useLoad(() => rpc<Row[]>('child_attendance', { p_child: childId, p_month: month + '-01' }), [childId, month])
+  const [busy, setBusy] = useState(false)
+  const { data, error, reload } = useLoad(() => rpc<Row[]>('child_attendance', { p_child: childId, p_month: month + '-01' }), [childId, month])
   const rows = data || []
   const byDay = new Map<string, Row[]>()
   rows.forEach((r) => byDay.set(r.date, [...(byDay.get(r.date) || []), r]))
@@ -35,6 +36,13 @@ export default function AttCalendar({ childId }: { childId: string }) {
   const cells: (string | null)[] = [...Array(lead).fill(null), ...Array.from({ length: days }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`)]
   const cnt = (f: (r: Row) => boolean) => rows.filter(f).length
   const present = cnt((r) => r.mark === 'present'), absent = cnt((r) => r.mark === 'absent'), nomark = cnt((r) => !r.mark && r.session_status !== 'cancelled' && r.date < today)
+  async function setMark(r: Row, m: 'present' | 'absent' | null) {
+    if (busy) return
+    setBusy(true)
+    try { await rpc('mark_attendance', { p_session: r.session_id, p_child: childId, p_mark: m, p_reason: m === 'absent' ? 'none' : null }); toast(m === 'present' ? 'Отмечено: был' : m === 'absent' ? 'Отмечено: не был' : 'Отметка снята'); reload(); onChanged?.() }
+    catch (e: any) { toast(e.message) }
+    setBusy(false)
+  }
   const list = open ? byDay.get(open) || [] : rows.filter((r) => r.mark || r.session_status === 'cancelled' || r.date < today)
   return (
     <div>
@@ -60,9 +68,13 @@ export default function AttCalendar({ childId }: { childId: string }) {
         <div className="cal-legend"><span className="ok">был {present}</span><span className="bad">не был {absent}</span>{nomark > 0 && <span className="warn">нет отметки {nomark}</span>}<span className="plan">по расписанию</span><span className="mut">отменено</span></div>
         <div className="hist">
           {list.length === 0 && <span className="meta">{open ? 'В этот день занятий нет' : 'В этом месяце отметок пока нет'}</span>}
-          {list.map((r) => { const s = state(r, today); return <div key={r.session_id + r.kind}>
+          {list.map((r) => { const s = state(r, today); const can = office && r.session_status !== 'cancelled' && r.date <= today; return <div key={r.session_id + r.kind} style={can ? { flexWrap: 'wrap' } : undefined}>
             <span>{dm(r.date)} {hm(r.start_time)} · {r.grp}<br /><span className={`meta cal-t ${s.c}`}>{s.t}</span></span>
             <span className="meta" style={{ textAlign: 'right' }}>{r.mark && !r.auto ? <>{r.marked_by || 'администратор'}<br />{r.marked_at && when(r.marked_at)}</> : r.auto && r.marked_at ? <>авто<br />{when(r.marked_at)}</> : ''}</span>
+            {can && <div className="marks" style={{ width: '100%' }}>
+              <button className="mk m-p" aria-pressed={r.mark === 'present'} disabled={busy} onClick={() => setMark(r, r.mark === 'present' ? null : 'present')}>Был</button>
+              <button className="mk m-a" aria-pressed={r.mark === 'absent'} disabled={busy} onClick={() => setMark(r, r.mark === 'absent' ? null : 'absent')}>Не был</button>
+            </div>}
           </div> })}
         </div>
         {open && <button className="btn sm ghost" onClick={() => setOpen(null)}>Показать весь месяц</button>}
