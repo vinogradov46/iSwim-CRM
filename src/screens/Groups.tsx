@@ -12,6 +12,9 @@ export default function Groups({ me, onBack }: { me: Me; onBack: () => void }) {
   const { data, error, reload } = useLoad(() => rpc<G[]>('groups_overview'), [])
   const [edit, setEdit] = useState<G | 'new' | null>(null)
   const [branch, setBranch] = useState<string>('all')
+  const todo = useLoad(() => rpc<{ group_id: string; n: number }[]>('days_todo'), [])
+  const todoN = new Map((todo.data || []).map((t) => [t.group_id, t.n]))
+  const todoAll = [...todoN.values()].reduce((a, b) => a + b, 0)
   const list = (data || []).filter((g) => branch === 'all' || g.branch_id === branch)
   const branches = [...new Map((data || []).map((g) => [g.branch_id, g.branch])).entries()]
   return (
@@ -19,6 +22,7 @@ export default function Groups({ me, onBack }: { me: Me; onBack: () => void }) {
       <button className="back" onClick={onBack}>← Назад</button>
       <h2>Группы и расписание</h2>
       <button className="btn" onClick={() => setEdit('new')}>+ Новая группа</button>
+      {todoAll > 0 && <div className="warnbox">Не указаны дни у {todoAll} детей в группах с несколькими днями. Пока дни не указаны, программа считает, что ребёнок ходит на все занятия, и ночью может поставить ложный пропуск. Откройте группу с пометкой «дни: N» и отметьте, кто когда ходит.</div>}
       {branches.length > 1 && <div className="chips">
         <button className="chip" aria-pressed={branch === 'all'} onClick={() => setBranch('all')}>Все</button>
         {branches.map(([id, n]) => <button key={id} className="chip" aria-pressed={branch === id} onClick={() => setBranch(id)}>{n}</button>)}
@@ -34,12 +38,15 @@ export default function Groups({ me, onBack }: { me: Me; onBack: () => void }) {
               <span className="grow"><span className="name">{g.branch} · {gshort(g.title) || days(g.weekdays)}</span><br />
                 <span className="meta">{days(g.weekdays)} · {g.duration_min} мин · {g.pool === 'big' ? 'большая вода' : 'малая вода'} · {g.coach_name || 'без тренера'}</span>
                 {g.reserve_kids > 0 && <><br /><span className="meta">В резерве: {g.reserve_kids}</span></>}</span>
-              {!g.active ? <Pill c="p-mut">закрыта</Pill> : <Pill c={full ? 'p-bad' : 'p-ok'}>{g.active_kids}/{g.capacity}</Pill>}
+              <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
+                {!g.active ? <Pill c="p-mut">закрыта</Pill> : <Pill c={full ? 'p-bad' : 'p-ok'}>{g.active_kids}/{g.capacity}</Pill>}
+                {(todoN.get(g.id) || 0) > 0 && <Pill c="p-warn">дни: {todoN.get(g.id)}</Pill>}
+              </span>
             </button>)
         })}
       </div>}
       <p className="note">Если группа заполнена (красная), нового ребёнка туда не записать — только в резерв. Чтобы добавить места, откройте группу и увеличьте вместимость.</p>
-      {edit && <EditGroup g={edit === 'new' ? null : edit} me={me} onClose={(ok) => { setEdit(null); if (ok) reload() }} />}
+      {edit && <EditGroup g={edit === 'new' ? null : edit} me={me} onClose={(ok) => { setEdit(null); todo.reload(); if (ok) reload() }} />}
     </>
   )
 }
@@ -105,29 +112,35 @@ function EditGroup({ g, me, onClose }: { g: G | null; me: Me; onClose: (ok: bool
 
 /** Кто в какие дни ходит (для групп с несколькими днями) */
 function GroupDays({ g }: { g: G }) {
-  const { data, error, reload } = useLoad(() => rpc<{ child_id: string; full_name: string; status: string; days: number[] | null }[]>('group_members', { p_group: g.id }), [g.id])
+  const { data, error, reload } = useLoad(() => rpc<{ child_id: string; full_name: string; status: string; days: number[] | null; days_set: boolean }[]>('group_members', { p_group: g.id }), [g.id])
   const [busy, setBusy] = useState<string | null>(null)
   const [open, setOpen] = useState(false)
+  async function confirmAll() {
+    try { const n: any = await rpc('confirm_group_days', { p_group: g.id }); toast(`Подтверждено: ${n} — ходят на все дни`); reload() } catch (e: any) { toast(e.message) }
+  }
   async function set(cid: string, days: number[] | null) {
     setBusy(cid)
     try { await rpc('set_enrollment_days', { p_child: cid, p_group: g.id, p_days: days }); reload() } catch (e: any) { toast(e.message) }
     setBusy(null)
   }
   const list = (data || []).filter((k) => k.status === 'active')
+  const unset = list.filter((k) => !k.days_set).length
   const per = g.weekdays.map((d) => [d, list.filter((k) => !k.days || k.days.includes(d)).length])
   return (
     <div className="miss">
       <span className="lbl">Кто в какие дни ходит</span>
       <p className="sub">{per.map(([d, n]) => `${DAYS[d - 1]}: ${n} детей`).join(' · ')}</p>
+      {data && unset > 0 && <div className="warnbox">Дни не указаны у {unset} из {list.length} детей</div>}
       {!open ? <button className="btn sm ghost" onClick={() => setOpen(true)}>Настроить дни для детей</button> : <>
         <p className="note">Если ребёнок ходит не во все дни группы — отметьте его дни. На занятии тренер увидит только тех, кто должен прийти в этот день.</p>
         <Err e={error} />
-        {!data ? <Loading /> : <div className="list">{list.map((k) => (
+        {unset > 0 && <button className="btn sm okb" onClick={confirmAll}>Остальные ({unset}) ходят на все дни — подтвердить</button>}
+        {!data ? <Loading /> : <div className="list">{[...list].sort((a, b) => Number(a.days_set) - Number(b.days_set)).map((k) => (
           <div className="row" key={k.child_id} style={{ flexWrap: 'wrap', gap: 6 }}>
-            <span className="grow name" style={{ minWidth: 140 }}>{k.full_name}</span>
+            <span className="grow name" style={{ minWidth: 140 }}>{k.full_name}{!k.days_set && <span className="meta" style={{ color: 'var(--warn)' }}> · не указано</span>}</span>
             <span className="chips" style={{ flexWrap: 'nowrap' }}>
-              <button className="chip" disabled={busy === k.child_id} aria-pressed={!k.days} onClick={() => set(k.child_id, null)}>Все</button>
-              {g.weekdays.map((d) => <button key={d} className="chip" disabled={busy === k.child_id} aria-pressed={!!k.days && k.days.length === 1 && k.days[0] === d} onClick={() => set(k.child_id, [d])}>{DAYS[d - 1]}</button>)}
+              <button className="chip" disabled={busy === k.child_id} aria-pressed={k.days_set && !k.days} onClick={() => set(k.child_id, null)}>Все</button>
+              {g.weekdays.map((d) => <button key={d} className="chip" disabled={busy === k.child_id} aria-pressed={!!k.days && k.days.length === 1 && k.days[0] === d} onClick={() => set(k.child_id, [d])}>только {DAYS[d - 1]}</button>)}
             </span>
           </div>))}</div>}
       </>}
