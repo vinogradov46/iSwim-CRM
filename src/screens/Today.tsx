@@ -252,7 +252,10 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
           {rows.length === 0 && <div className="row meta">{hidden.length ? 'Все дети группы без абонемента' : 'В группе пока никого'}</div>}
         </div>
       )}
-      {hidden.length > 0 && <button className="btn sm ghost" onClick={() => setShowNoSub(!showNoSub)}>{showNoSub ? 'Скрыть детей без абонемента' : `Без абонемента: ${hidden.length} — показать`}</button>}
+      {hidden.length > 0 && <>
+        <button className="btn sm ghost" onClick={() => setShowNoSub(!showNoSub)}>{showNoSub ? 'Скрыть детей без абонемента' : `Без абонемента: ${hidden.length} — показать`}</button>
+        {!showNoSub && <p className="note">Эти дети не в списке. Если кто-то из них пришёл — нажмите «показать» и отметьте «Был». Тех, кого не отметили, программа в пропуски не запишет.</p>}
+      </>}
       {canMark && rows.length > 6 && <button className="btn ghost" onClick={() => setGuest(true)}>+ Пришёл ребёнок не из этой группы (отработка)</button>}
       {guest && <GuestSheet session={id} onClose={(ok) => { setGuest(false); if (ok) reload() }} />}
       {auto ? <p className="note">«Был» списывает занятие. Кого не отметили — через день программа поставит «не был» и передаст администратору: она решит, перенос по справке или отработка в другой день. Бесплатная отработка не списывается.</p> :
