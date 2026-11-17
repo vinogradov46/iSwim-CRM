@@ -43,6 +43,13 @@ export default function AttCalendar({ childId, office, onChanged }: { childId: s
     catch (e: any) { toast(e.message) }
     setBusy(false)
   }
+  async function undo(r: Row) {
+    if (busy) return
+    setBusy(true)
+    try { await rpc('undo_compensation_s', { p_session: r.session_id, p_child: childId }); toast('Возврат снят: пропуск снова ждёт решения'); reload(); onChanged?.() }
+    catch (e: any) { toast(e.message) }
+    setBusy(false)
+  }
   const list = open ? byDay.get(open) || [] : rows.filter((r) => r.mark || r.session_status === 'cancelled' || r.date < today)
   return (
     <div>
@@ -74,6 +81,7 @@ export default function AttCalendar({ childId, office, onChanged }: { childId: s
             {can && <div className="marks" style={{ width: '100%' }}>
               <button className="mk m-p" aria-pressed={r.mark === 'present'} disabled={busy} onClick={() => setMark(r, r.mark === 'present' ? null : 'present')}>Был</button>
               <button className="mk m-a" aria-pressed={r.mark === 'absent'} disabled={busy} onClick={() => setMark(r, r.mark === 'absent' ? null : 'absent')}>Не был</button>
+              {r.mark === 'absent' && ['transfer', 'refund', 'credit', 'recalc'].includes(r.sick_status || '') && <button className="mk m-r" disabled={busy} onClick={() => undo(r)}>Снять возврат</button>}
             </div>}
           </div> })}
         </div>

@@ -121,8 +121,9 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
         <div className="hist">{data.absences.map((a: any) => <div key={a.id}>
           <span>{dm(a.date)} · {a.group}{a.reason === 'sick' ? ' · болел' : ''}</span>
           <span style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end', flexWrap: 'wrap' }}>
-            {a.status === 'refund' || a.status === 'recalc' ? <span className="meta">возвращено</span>
-              : a.status === 'credit' ? <span className="meta">в отработку</span>
+            {a.status === 'refund' || a.status === 'recalc' || a.status === 'credit' || a.status === 'transfer' ? <>
+                <span className="meta">{a.status === 'credit' ? 'в отработку' : a.status === 'transfer' ? 'перенос' : 'возвращено'}</span>
+                {office && <button className="btn sm ghost" style={{ padding: '3px 8px' }} onClick={() => call('undo_compensation', { p_attendance: a.id }, 'Возврат снят: пропуск снова ждёт решения')}>Снять</button>}</>
               : !a.charged ? <span className="meta">не списано</span>
               : office ? <>
                 <button className="btn sm ghost" style={{ padding: '3px 8px' }} onClick={() => call('compensate_absence', { p_attendance: a.id, p_mode: 'refund' }, 'Занятие возвращено на остаток')}>Вернуть</button>
