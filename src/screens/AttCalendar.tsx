@@ -11,7 +11,7 @@ const SICK: Record<string, string> = { wait: 'ждёт решения админ
 
 function state(r: Row, today: string): { c: string; t: string } {
   if (r.mark === 'present') return { c: 'ok', t: r.kind === 'makeup' ? 'был · отработка' : r.kind === 'guest' ? 'был · из другой группы' : 'был' }
-  if (r.mark === 'absent') return { c: 'bad', t: 'не был' + (r.auto ? ' (поставила программа)' : '') + (r.sick_status ? ` · ${SICK[r.sick_status] || r.sick_status}` : r.absence_reason === 'sick' ? ' · болеет' : '') }
+  if (r.mark === 'absent') return { c: 'bad', t: 'не был' + (r.auto ? ' (поставила программа)' : '') + (r.absence_reason === 'makeup_cert' ? ' · отработка по справке (перенос на след. месяц)' : r.absence_reason === 'makeup_nocert' ? ' · отработка без справки (доп. день)' : '') + (r.sick_status ? ` · ${SICK[r.sick_status] || r.sick_status}` : r.absence_reason === 'sick' ? ' · болеет' : '') }
   if (r.session_status === 'cancelled') return { c: 'mut', t: 'отменено' + (r.cancel_reason ? `: ${r.cancel_reason.toLowerCase()}` : '') }
   if (r.date < today) return { c: 'warn', t: r.kind === 'makeup' ? 'записан на отработку — нет отметки' : 'нет отметки' }
   return { c: 'plan', t: r.kind === 'makeup' ? 'записан на отработку' : 'по расписанию' }
@@ -36,10 +36,10 @@ export default function AttCalendar({ childId, office, onChanged }: { childId: s
   const cells: (string | null)[] = [...Array(lead).fill(null), ...Array.from({ length: days }, (_, i) => `${month}-${String(i + 1).padStart(2, '0')}`)]
   const cnt = (f: (r: Row) => boolean) => rows.filter(f).length
   const present = cnt((r) => r.mark === 'present'), absent = cnt((r) => r.mark === 'absent'), nomark = cnt((r) => !r.mark && r.session_status !== 'cancelled' && r.date < today)
-  async function setMark(r: Row, m: 'present' | 'absent' | null) {
+  async function setMark(r: Row, m: 'present' | 'absent' | null, reason = 'none') {
     if (busy) return
     setBusy(true)
-    try { await rpc('mark_attendance', { p_session: r.session_id, p_child: childId, p_mark: m, p_reason: m === 'absent' ? 'none' : null }); toast(m === 'present' ? 'Отмечено: был' : m === 'absent' ? 'Отмечено: не был' : 'Отметка снята'); reload(); onChanged?.() }
+    try { await rpc('mark_attendance', { p_session: r.session_id, p_child: childId, p_mark: m, p_reason: m === 'absent' ? reason : null }); toast(m === 'present' ? 'Отмечено: был' : m === 'absent' ? (reason === 'none' ? 'Отмечено: не был' : 'Отмечено: не был. Директору поставлена задача разобрать пропуск') : 'Отметка снята'); reload(); onChanged?.() }
     catch (e: any) { toast(e.message) }
     setBusy(false)
   }
@@ -81,6 +81,10 @@ export default function AttCalendar({ childId, office, onChanged }: { childId: s
             {can && <div className="marks" style={{ width: '100%' }}>
               <button className="mk m-p" aria-pressed={r.mark === 'present'} disabled={busy} onClick={() => setMark(r, r.mark === 'present' ? null : 'present')}>Был</button>
               <button className="mk m-a" aria-pressed={r.mark === 'absent'} disabled={busy} onClick={() => setMark(r, r.mark === 'absent' ? null : 'absent')}>Не был</button>
+              {r.mark !== 'present' && !r.sick_status?.match(/^(transfer|refund|credit|recalc)$/) && <>
+                <button className="mk m-r" aria-pressed={r.absence_reason === 'makeup_cert'} disabled={busy} onClick={() => setMark(r, r.absence_reason === 'makeup_cert' ? null : 'absent', 'makeup_cert')}>Отработка по справке</button>
+                <button className="mk m-r" aria-pressed={r.absence_reason === 'makeup_nocert'} disabled={busy} onClick={() => setMark(r, r.absence_reason === 'makeup_nocert' ? null : 'absent', 'makeup_nocert')}>Отработка без справки</button>
+              </>}
               {r.mark === 'absent' && ['transfer', 'refund', 'credit', 'recalc'].includes(r.sick_status || '') && <button className="mk m-r" disabled={busy} onClick={() => undo(r)}>Снять возврат</button>}
             </div>}
           </div> })}

@@ -181,6 +181,7 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
         if (m === 'present' && r?.debt) toast(`${c.full_name}: занятие в долг. Примите оплату`)
         else if (m === 'present' && r?.month_unpaid) toast(`${c.full_name}: месяц не оплачен`)
         else if (reason === 'sick') toast('Списано. Если будет справка — администратор возместит')
+        else if (reason === 'makeup_cert' || reason === 'makeup_nocert') toast('Записано. Директору поставлена задача разобрать этот пропуск')
       }
       reload()
     } catch (e: any) { toast(e.message) }
@@ -240,7 +241,7 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
                   </div>
                   {c.kind !== 'trial' && pressed === 'absent' && !(coachAuto && c.kind === 'group') && (
                     <div className="reasons">
-                      {([['none', 'Без причины'], ['sick', 'Болеет — будет справка']] as const).map(([v, l]) => (
+                      {([['none', 'Без причины'], ['makeup_cert', 'Отработка по справке (перенос на след. месяц)'], ['makeup_nocert', 'Отработка без справки (доп. день)']] as const).map(([v, l]) => (
                         <button key={v} className="mk m-r" aria-pressed={c.absence_reason === v} onClick={() => mark(c, 'absent', v)}>{l}</button>
                       ))}
                     </div>
