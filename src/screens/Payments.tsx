@@ -20,7 +20,7 @@ function Incoming({ me }: { me: Me }) {
   const { data, error, reload } = useLoad(async () => {
     const { data, error } = await supabase.from('bot_payments').select('*').eq('status', 'new').order('paid_at')
     if (error) throw error
-    const withMatch = await Promise.all((data || []).map(async (b: any) => ({ ...b, cands: await rpc<any[]>('match_bot_payment', { p_id: b.id }).catch(() => []) })))
+    const withMatch = await Promise.all((data || []).map(async (b: any) => ({ ...b, cands: await rpc<any[]>('match_bot_payment', { p_id: b.id }).catch(() => []), dupes: await rpc<any[]>('bot_existing_payments', { p_id: b.id }).catch(() => []) })))
     return withMatch
   }, [])
   const [busy, setBusy] = useState(false)
@@ -42,7 +42,15 @@ function Incoming({ me }: { me: Me }) {
     } catch (e: any) { toast(e.message) }
     setBusy(false)
   }
+  async function link(b: any, paymentId: string) {
+    try { await rpc('link_bot_payment', { p_bot: b.id, p_payment: paymentId }); toast('Привязано к уже проведённой оплате, не задвоено'); reload() } catch (e: any) { toast(e.message) }
+  }
+  async function already(b: any) {
+    if (!window.confirm('Оплата уже внесена вручную, но я не нашёл её в списке? Тогда строка просто уберётся из очереди. Убрать?')) return
+    try { await rpc('ignore_bot_payment', { p_id: b.id, p_reason: 'проведена вручную' }); toast('Убрано: оплата уже проведена'); reload() } catch (e: any) { toast(e.message) }
+  }
   async function quick(b: any, childId: string) {
+    if (b.dupes?.length && !window.confirm('Похоже, эта оплата уже проведена вручную. Всё равно провести ещё раз? (оплата задвоится)')) return
     const plan = (await rpc<any[]>('plan_from_amount', { p_amount: b.amount }))[0]
     if (!plan) return setPay({ child: childId, b })
     try {
@@ -68,15 +76,19 @@ function Incoming({ me }: { me: Me }) {
           {data.map((b: any) => (
             <div className="miss" key={b.id}>
               <div className="bot">{money(b.amount)} BYN · {b.paid_at ? new Date(b.paid_at).toLocaleString('ru-RU', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) : ''}{'\n'}Плательщик: {b.payer || '(не указан)'}{b.lessons ? `\nПо сумме: ${b.lessons} зан.` : '\nСумма не по прайсу'}</div>
+              {b.dupes?.length > 0 && <>
+                <div className="warnbox">Похоже, уже проведена вручную. Нажмите на неё, чтобы привязать, и она не задвоится:</div>
+                <div className="chips">{b.dupes.map((d: any) => <button key={d.payment_id} className="chip" onClick={() => link(b, d.payment_id)}>{d.child_name} · {money(d.amount)} · {dm(String(d.paid_at).slice(0, 10))}{d.name_match ? ' ✓' : ''}</button>)}</div>
+              </>}
               {b.cands.length === 1 ? <>
                 <div className="okbox">{b.cands[0].child_name} · {b.cands[0].reason}</div>
-                <div className="acts"><button className="btn sm okb" onClick={() => quick(b, b.cands[0].child_id)}>Провести</button><button className="btn sm ghost" onClick={() => { setPick(b); setQ('') }}>Другой ребёнок</button></div>
+                <div className="acts"><button className="btn sm okb" onClick={() => quick(b, b.cands[0].child_id)}>Провести</button><button className="btn sm ghost" onClick={() => { setPick(b); setQ('') }}>Другой ребёнок</button><button className="btn sm ghost" onClick={() => already(b)}>Уже проведена</button></div>
               </> : b.cands.length > 1 ? <>
                 <div className="warnbox">Подходят несколько. За кого оплата?</div>
-                <div className="chips">{b.cands.map((c: any) => <button key={c.child_id} className="chip" onClick={() => quick(b, c.child_id)}>{c.child_name}</button>)}<button className="chip" onClick={() => { setPick(b); setQ('') }}>Другой…</button></div>
+                <div className="chips">{b.cands.map((c: any) => <button key={c.child_id} className="chip" onClick={() => quick(b, c.child_id)}>{c.child_name}</button>)}<button className="chip" onClick={() => { setPick(b); setQ('') }}>Другой…</button><button className="chip" onClick={() => already(b)}>Уже проведена</button></div>
               </> : <>
                 <div className="warnbox">Ребёнок не найден автоматически</div>
-                <div className="acts"><button className="btn sm" onClick={() => { setPick(b); setQ(b.payer?.split(' ')[0] || '') }}>Выбрать ребёнка</button><button className="btn sm ghost" onClick={() => ignore(b)}>Не за плавание</button></div>
+                <div className="acts"><button className="btn sm" onClick={() => { setPick(b); setQ(b.payer?.split(' ')[0] || '') }}>Выбрать ребёнка</button><button className="btn sm ghost" onClick={() => already(b)}>Уже проведена</button><button className="btn sm ghost" onClick={() => ignore(b)}>Не за плавание</button></div>
               </>}
               {pick?.id === b.id && <>
                 <input autoFocus placeholder="Фамилия ребёнка или родителя" value={q} onChange={(e) => setQ(e.target.value)} />
