@@ -6,6 +6,9 @@ pdfjs.GlobalWorkerOptions.workerSrc = workerUrl
 export type EposRow = { order: string; invoice: string; paid_at: string; amount: number; payer: string }
 
 const ROW = /^(\d{6,})\s+(\d\d\.\d\d\.\d{4})\s+(\d+)\s+(\S+)\s+(\d\d\.\d\d\.\d{4} \d\d:\d\d)\s+(\d\d\.\d\d\.\d{4})\s+([\d ]+,\d\d)\s+([\d ]+,\d\d)\s+([\d ]+,\d\d)$/
+// Второй вид реестра: «Дата оплаты, № счета, Клиент, Банк, Оплачено, Перечислено» (клиент в той же строке, может быть пустым)
+const AMT = '(\\d{1,3}(?: \\d{3})*,\\d\\d)'
+const ROW2 = new RegExp('^(\\d\\d\\.\\d\\d\\.\\d{4} \\d\\d:\\d\\d)\\s+(\\S+)(?:\\s+(.*?))?\\s+(\\d+)\\s+' + AMT + '\\s+' + AMT + '$')
 const num = (s: string) => parseFloat(s.replace(/\s/g, '').replace(',', '.'))
 
 export async function parseEposPdf(file: File): Promise<{ rows: EposRow[]; total: number | null }> {
@@ -28,8 +31,10 @@ export async function parseEposPdf(file: File): Promise<{ rows: EposRow[]; total
   const rows: EposRow[] = []
   let total: number | null = null
   lines.forEach((l, i) => {
-    const t = l.match(/Итого по услуге:\s*([\d ]+,\d\d)/)
+    const t = l.match(/Итого по услуге\s*:\s*([\d ]+,\d\d)/)
     if (t) total = num(t[1])
+    const m2 = l.match(ROW2)
+    if (m2) { rows.push({ order: '', invoice: m2[2], paid_at: m2[1], amount: num(m2[5]), payer: (m2[3] || '').trim() }); return }
     const m = l.match(ROW)
     if (!m) return
     const next = lines[i + 1] || ''
