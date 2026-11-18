@@ -14,6 +14,7 @@ async function gzipB64(text: string): Promise<string> {
 
 Deno.serve(async (req) => {
   const key = req.headers.get('x-key') ?? ''
+  const opts = await req.json().catch(() => ({})) as { target?: string; targetKey?: string }
   const { data: ok } = await db.rpc('tg_check_key', { p_key: key })
   if (!ok) return json({ error: 'forbidden' }, 403)
   const { data: cfg, error: e1 } = await db.rpc('backup_config', { p_key: key })
@@ -24,6 +25,11 @@ Deno.serve(async (req) => {
   const text = JSON.stringify(dump)
   const rows = Object.values((dump as any).tables as Record<string, unknown[]>).reduce((a, t) => a + t.length, 0)
   const day = new Date(Date.now() + 3 * 3600e3).toISOString().slice(0, 10)
+  // пробное восстановление: отправить копию в другой проект вместо Google Диска
+  if (opts.target) {
+    const t = await fetch(opts.target, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ key: opts.targetKey, data: await gzipB64(text) }) })
+    return json({ status: t.status, rows, result: await t.text() }, t.ok ? 200 : 502)
+  }
   const body = { key: cfg.key, name: `iswim-backup-${day}.json.gz`, rows, data: await gzipB64(text) }
   const r = await fetch(cfg.url, { method: 'POST', headers: { 'content-type': 'text/plain' }, body: JSON.stringify(body), redirect: 'follow' })
   const out = await r.text()
