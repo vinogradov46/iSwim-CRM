@@ -23,6 +23,7 @@ Deno.serve(async (req) => {
   } else raw = new Uint8Array(await req.arrayBuffer())
   if (key !== RKEY) return json({ error: 'forbidden' }, 403)
 
+  const skipSchema = new URL(req.url).searchParams.get('skip_schema') === '1' // повторить только загрузку данных, если структура уже создана
   const dump = JSON.parse(await gunzip(raw))
   const tables: Record<string, any[]> = dump.tables
   const system = dump.system ?? {}
@@ -41,7 +42,7 @@ Deno.serve(async (req) => {
     }
     // 1. миграции: несколько проходов (часть изменений когда-то делалась вне миграций, порядок может не сойтись с первого раза)
     const runnable = migs.filter((m) => !m.name.startsWith('import_')) // импорты данных не нужны: данные приедут из копии
-    let pending: { id: string; st: string }[] = runnable.flatMap((m) => m.statements.map((st) => ({ id: `${m.version} ${m.name}`, st })))
+    let pending: { id: string; st: string }[] = skipSchema ? [] : runnable.flatMap((m) => m.statements.map((st) => ({ id: `${m.version} ${m.name}`, st })))
     let lastErr: Record<string, string> = {}
     for (let pass = 1; pass <= 3 && pending.length; pass++) {
       const failed: typeof pending = []
@@ -67,7 +68,7 @@ Deno.serve(async (req) => {
     // 2-3. логины и данные (триггеры и внешние ключи отключены на время загрузки)
     const insertRows = async (tx: any, tbl: string, schema: string, name: string, rows: any[]) => {
       const cols = (await tx.unsafe(`select column_name from information_schema.columns where table_schema=$1 and table_name=$2 and is_generated='NEVER' order by ordinal_position`, [schema, name])).map((r: any) => `"${r.column_name}"`).join(',')
-      await tx.unsafe(`insert into ${tbl} (${cols}) select ${cols} from jsonb_populate_recordset(null::${tbl}, $1::jsonb) on conflict do nothing`, [JSON.stringify(rows)])
+      await tx.unsafe(`insert into ${tbl} (${cols}) overriding system value select ${cols} from jsonb_populate_recordset(null::${tbl}, $1::text::jsonb) on conflict do nothing`, [JSON.stringify(rows)])
     }
     await sql.begin(async (tx) => {
       await tx.unsafe(`set local session_replication_role = replica`)
@@ -76,15 +77,19 @@ Deno.serve(async (req) => {
         if (rows.length) { await insertRows(tx, `auth.${name}`, 'auth', name, rows); report.tables[`auth.${name}`] = rows.length }
       }
       const have = new Set((await tx.unsafe(`select table_name from information_schema.tables where table_schema='public' and table_type='BASE TABLE'`)).map((r: any) => r.table_name))
+      // сначала очищаем ВСЕ таблицы одним запросом: поштучный truncate ... cascade стирал бы уже загруженные таблицы, которые ссылаются на очищаемую
+      const present = Object.keys(tables).filter((t) => have.has(t))
+      if (present.length) await tx.unsafe(`truncate ${present.map((t) => `public."${t}"`).join(', ')} cascade`)
       for (const [t, rows] of Object.entries(tables)) {
         if (!have.has(t)) { report.notes.push(`таблицы ${t} нет в новой базе`); continue }
-        await tx.unsafe(`truncate public."${t}" cascade`)
         if (rows.length) await insertRows(tx, `public."${t}"`, 'public', t, rows)
         report.tables[t] = rows.length
       }
-      for (const k of system.private_app_keys ?? []) {
-        await tx.unsafe(`insert into private.app_keys(k, v) values ($1, $2) on conflict (k) do update set v = excluded.v`, [k.k, k.v])
+      // счётчики автонумерации (id) продолжаем с максимального значения
+      for (const r of await tx.unsafe(`select table_name t, column_name c from information_schema.columns where table_schema='public' and (is_identity='YES' or column_default like 'nextval%')`)) {
+        await tx.unsafe(`select setval(pg_get_serial_sequence('public."${r.t}"', '${r.c}'), coalesce((select max("${r.c}") from public."${r.t}"), 0) + 1, false)`)
       }
+      report.notes.push('ключи приложения (значения в копию не входят) нужно задать заново: ' + (system.private_app_keys ?? []).join(', '))
       await tx.unsafe(`insert into private.app_keys(k, v) select 'cron_key', encode(extensions.gen_random_bytes(24), 'hex') where not exists (select 1 from private.app_keys where k = 'cron_key')`)
     })
     // 4. ночные задачи
