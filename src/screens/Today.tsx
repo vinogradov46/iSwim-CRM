@@ -25,7 +25,7 @@ export default function Today({ me }: { me: Me }) {
   return (
     <div className={office ? 'split' : 'col'}>
       {office && <section className="col"><Inbox data={inbox.data} reload={() => { inbox.reload(); reload() }} onOpen={(id, d) => setOpen({ id, day: d })} />
-        {inbox.data && !inbox.data.sick?.length && !inbox.data.handovers?.length && !inbox.data.tasks?.length && !inbox.data.unmarked?.length && !inbox.data.incoming && <div className="okbox desk-only">Входящих дел нет</div>}</section>}
+        {inbox.data && !inbox.data.sick?.length && !inbox.data.handovers?.length && !inbox.data.tasks?.length && !inbox.data.unmarked?.length && !inbox.data.incoming && !inbox.data.trials_open?.length && !inbox.data.debtors?.length && !inbox.data.ending?.length && <div className="okbox desk-only">Входящих дел нет</div>}</section>}
       <section className="col">
       <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
         <h2 className="grow" style={{ textTransform: 'capitalize' }}>{dateRu(day)}</h2>
@@ -109,6 +109,25 @@ function SessionActions({ s, reload }: { s: Sess; reload: () => void }) {
   )
 }
 
+function Debts({ title, hint, items, tone, onCard }: { title: string; hint: string; items: any[] | undefined; tone: string; onCard: (id: string) => void }) {
+  const [all, setAll] = useState(false)
+  if (!items?.length) return null
+  const list = all ? items : items.slice(0, 10)
+  return (
+    <>
+      <h2>{title} · {items.length}</h2>
+      <p className="sub">{hint}</p>
+      <div className="list">{list.map((d: any) => (
+        <button className="row" key={d.child_id} onClick={() => onCard(d.child_id)}>
+          <span className="grow"><span className="name">{d.full_name}</span><br /><span className="meta">{d.group || '—'}</span><br /><span className="meta phone">{phonePretty(d.phone)}</span></span>
+          <Pill c={tone}>{d.lessons_left < 0 ? `долг ${-d.lessons_left}` : `остаток ${d.lessons_left}`}</Pill>
+        </button>))}
+      </div>
+      {items.length > 10 && <button className="btn sm ghost" onClick={() => setAll(!all)}>{all ? 'Свернуть' : `Показать всех (${items.length})`}</button>}
+    </>
+  )
+}
+
 function Inbox({ data, reload, onOpen }: { data: any; reload: () => void; onOpen: (id: string, day: string) => void }) {
   const [card, setCard] = useState<string | null>(null)
   if (!data) return null
@@ -147,6 +166,26 @@ function Inbox({ data, reload, onOpen }: { data: any; reload: () => void; onOpen
             <button className="kidname" onClick={() => t.child_id && setCard(t.child_id)}><span className="name">{t.full_name || 'Задача'}</span><br /><span className="meta">{t.text}</span><br /><span className="meta phone">{phonePretty(t.phone)}</span></button>
             <button className="btn sm ghost" onClick={() => act('complete_task', { p_task: t.id }, 'Задача закрыта')}>Готово</button>
           </div>))}
+        </div></>}
+      {data.trials_open?.length > 0 && <>
+        <h2>Пробные без отметки · {data.trials_open.length}</h2>
+        <p className="sub">Пробное прошло, а результата нет. Отметьте — и родителю уйдёт сообщение, а вам придёт задача.</p>
+        <div className="list">{data.trials_open.map((t: any) => (
+          <div className="miss" key={t.id}>
+            <button className="kidname" onClick={() => setCard(t.child_id)}><span className="name">{t.full_name}</span><br /><span className="meta">{dm(t.date)} · {t.group}</span><br /><span className="meta phone">{phonePretty(t.phone)}</span></button>
+            <span style={{ display: 'flex', gap: 6 }}>
+              <button className="btn sm okb" onClick={() => act('mark_trial', { p_trial: t.id, p_result: 'came' }, 'Отмечено: пришёл')}>Пришёл</button>
+              <button className="btn sm ghost" onClick={() => act('mark_trial', { p_trial: t.id, p_result: 'noshow' }, 'Отмечено: не пришёл')}>Не пришёл</button>
+            </span>
+          </div>))}
+        </div></>}
+      <Debts title="Долг по занятиям" hint="Ребёнок отходил больше, чем оплачено. Если оплата уже была, но не внесена — проведите её в карточке." items={data.debtors} tone="p-bad" onCard={setCard} />
+      <Debts title="Абонемент заканчивается" hint="Остался 0–1 урок, а ребёнок ходил последние три недели. Самое время напомнить об оплате." items={data.ending} tone="p-warn" onCard={setCard} />
+      {(data.nodays > 0 || data.no_tg?.length > 0) && <>
+        <h2>Порядок в данных</h2>
+        <div className="list">
+          {data.nodays > 0 && <div className="row"><span className="grow"><span className="name">Не указаны дни у {data.nodays} детей</span><br /><span className="meta">Дети → Группы → «Изменить» у группы → «Настроить дни». Без этого программа может поставить ложный пропуск.</span></span></div>}
+          {data.no_tg?.length > 0 && <div className="row"><span className="grow"><span className="name">Telegram не подключён: {data.no_tg.length}</span><br /><span className="meta">{data.no_tg.join(', ')}. Им не приходят напоминания об отметках. Пусть нажмут «Telegram» вверху экрана.</span></span></div>}
         </div></>}
       {card && <ChildCard id={card} onClose={() => { setCard(null); reload() }} />}
     </>
