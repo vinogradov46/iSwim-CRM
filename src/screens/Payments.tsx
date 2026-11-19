@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { rpc, supabase, money, dm, hm, phonePretty, type Me } from '../lib'
-import { useLoad, Loading, Err, Pill, Chips, toast } from '../ui'
+import { rpc, supabase, money, dm, hm, phonePretty, priceFor, PRICE, lw, type Me } from '../lib'
+import { useLoad, Loading, Err, Pill, Chips, toast, Sheet } from '../ui'
 import Indiv from './Indiv'
 import { parseEposPdf } from '../epos'
 import PaySheet from './PaySheet'
@@ -26,6 +26,7 @@ function Incoming({ me }: { me: Me }) {
   const [busy, setBusy] = useState(false)
   const [pay, setPay] = useState<{ child: string; b: any } | null>(null)
   const [pick, setPick] = useState<any | null>(null)
+  const [split, setSplit] = useState<any | null>(null)
   const [q, setQ] = useState('')
   const found = useLoad(() => (pick && q.length >= 2 ? rpc<any[]>('search_children', { p_q: q, p_limit: 10 }) : Promise.resolve([])), [q, !!pick])
 
@@ -90,6 +91,7 @@ function Incoming({ me }: { me: Me }) {
                 <div className="warnbox">Ребёнок не найден автоматически</div>
                 <div className="acts"><button className="btn sm" onClick={() => { setPick(b); setQ(b.payer?.split(' ')[0] || '') }}>Выбрать ребёнка</button><button className="btn sm ghost" onClick={() => already(b)}>Уже проведена</button><button className="btn sm ghost" onClick={() => ignore(b)}>Не за плавание</button></div>
               </>}
+              <button className="btn sm ghost" onClick={() => setSplit(b)}>Разделить на нескольких детей</button>
               {pick?.id === b.id && <>
                 <input autoFocus placeholder="Фамилия ребёнка или родителя" value={q} onChange={(e) => setQ(e.target.value)} />
                 <div className="list">{(found.data || []).map((c: any) => <button key={c.child_id} className="row" onClick={() => { setPick(null); setPay({ child: c.child_id, b }) }}><span className="grow"><span className="name">{c.full_name}</span><br /><span className="meta">{c.groups} · {phonePretty(c.phone)}</span></span></button>)}</div>
@@ -98,6 +100,7 @@ function Incoming({ me }: { me: Me }) {
           ))}
         </div>
       )}
+      {split && <SplitSheet b={split} onClose={(ok) => { setSplit(null); if (ok) reload() }} />}
       {pay && <PaySheet childId={pay.child} me={me} incoming={{ id: pay.b.id, amount: Number(pay.b.amount), payer: pay.b.payer, lessons: pay.b.lessons }} onClose={(ok) => { setPay(null); if (ok) reload() }} />}
     </>
   )
@@ -159,5 +162,78 @@ function CashOverview() {
       </div>}
       <div className="calc">Всего вне кассы: {money(total)} BYN</div>
     </>
+  )
+}
+
+/** по сумме платежа понять, что оплачено: пробное, разовое или абонемент на N занятий (в т.ч. со скидкой семьи) */
+function guessPlan(a: number): { plan: string; lessons: number; fam: boolean } | null {
+  if (Math.abs(a - PRICE.trial) < 0.01) return { plan: 'trial', lessons: 1, fam: false }
+  for (let n = 1; n <= 40; n++) if (Math.abs(priceFor(n, false) - a) <= 0.5) return { plan: n === 1 ? 'single' : 'count', lessons: n, fam: false }
+  for (let n = 2; n <= 40; n++) if (Math.abs(priceFor(n, true) - a) <= 0.5) return { plan: 'count', lessons: n, fam: true }
+  return null
+}
+
+type Part = { child: { id: string; name: string } | null; amount: string; lessons: string }
+
+function SplitRow({ p, onChange, onRemove, canRemove }: { p: Part; onChange: (x: Part) => void; onRemove: () => void; canRemove: boolean }) {
+  const [q, setQ] = useState('')
+  const found = useLoad(() => (!p.child && q.length >= 2 ? rpc<any[]>('search_children', { p_q: q, p_limit: 6 }) : Promise.resolve([])), [q, !!p.child])
+  const a = parseFloat(p.amount.replace(',', '.'))
+  const g = a > 0 ? guessPlan(a) : null
+  return (
+    <div className="miss">
+      {p.child ? <div className="okbox">{p.child.name} <button className="chip" onClick={() => onChange({ ...p, child: null })}>Другой</button></div> : <>
+        <input placeholder="Фамилия ребёнка" value={q} onChange={(e) => setQ(e.target.value)} />
+        <div className="list">{(found.data || []).map((c: any) => <button key={c.child_id} className="row" onClick={() => { onChange({ ...p, child: { id: c.child_id, name: c.full_name } }); setQ('') }}><span className="grow"><span className="name">{c.full_name}</span><br /><span className="meta">{c.groups}</span></span></button>)}</div>
+      </>}
+      <label>Сколько за этого ребёнка, BYN</label>
+      <input inputMode="decimal" value={p.amount} onChange={(e) => onChange({ ...p, amount: e.target.value })} />
+      {a > 0 && (g ? <p className="sub">{g.plan === 'trial' ? 'Пробное' : g.plan === 'single' ? 'Разовое занятие' : `Абонемент: ${g.lessons} ${lw(g.lessons)}${g.fam ? ' со скидкой семьи' : ''}`}</p>
+        : <><div className="warnbox">Сумма не по прайсу. Укажите, сколько занятий оплачено</div><input inputMode="numeric" placeholder="Занятий" value={p.lessons} onChange={(e) => onChange({ ...p, lessons: e.target.value })} /></>)}
+      {canRemove && <button className="btn sm ghost" onClick={onRemove}>Убрать</button>}
+    </div>
+  )
+}
+
+function SplitSheet({ b, onClose }: { b: any; onClose: (ok: boolean) => void }) {
+  const total = Number(b.amount)
+  const [parts, setParts] = useState<Part[]>([{ child: null, amount: '', lessons: '' }, { child: null, amount: '', lessons: '' }])
+  const [err, setErr] = useState<string | null>(null), [busy, setBusy] = useState(false)
+  const sum = Math.round(parts.reduce((x, p) => x + (parseFloat(p.amount.replace(',', '.')) || 0), 0) * 100) / 100
+  const left = Math.round((total - sum) * 100) / 100
+  function setPart(i: number, x: Part) {
+    const next = parts.map((p, k) => (k === i ? x : p))
+    // для двоих: вторая сумма подставляется как остаток
+    if (next.length === 2 && i === 0) { const a = parseFloat(x.amount.replace(',', '.')); if (a > 0 && a < total) next[1] = { ...next[1], amount: String(Math.round((total - a) * 100) / 100) } }
+    setParts(next)
+  }
+  async function save() {
+    const items: any[] = []
+    for (const p of parts) {
+      const a = parseFloat(p.amount.replace(',', '.'))
+      if (!p.child) return setErr('Выберите ребёнка в каждой строке')
+      if (!(a > 0)) return setErr('Укажите сумму для каждого ребёнка')
+      const g = guessPlan(a)
+      const n = g ? g.lessons : parseInt(p.lessons)
+      if (!n || n < 1) return setErr(`Для ${p.child.name} укажите число занятий`)
+      items.push({ child: p.child.id, amount: a, plan_type: g ? g.plan : n === 1 ? 'single' : 'count', lessons: n, family_discount: g?.fam ?? false })
+    }
+    if (new Set(items.map((x) => x.child)).size !== items.length) return setErr('Один ребёнок выбран дважды')
+    if (Math.abs(left) > 0.009) return setErr(`Сумма частей ${money(sum)} не равна платежу ${money(total)}`)
+    setBusy(true); setErr(null)
+    try { await rpc('record_split_payment', { p_bot: b.id, p_items: items }); toast(`Проведено на ${items.length} детей`); onClose(true) }
+    catch (e: any) { setErr(e.message); setBusy(false) }
+  }
+  return (
+    <Sheet onClose={() => onClose(false)}>
+      <h2>Разделить оплату</h2>
+      <p className="sub">EPOS {money(total)} BYN{b.payer ? ` от ${b.payer}` : ''}. Разнесите сумму по детям.</p>
+      {parts.map((p, i) => <SplitRow key={i} p={p} onChange={(x) => setPart(i, x)} canRemove={parts.length > 2} onRemove={() => setParts(parts.filter((_, k) => k !== i))} />)}
+      {parts.length < 5 && <button className="btn sm ghost" onClick={() => setParts([...parts, { child: null, amount: left > 0 ? String(left) : '', lessons: '' }])}>+ ещё ребёнок</button>}
+      <div className={left === 0 ? 'okbox' : 'warnbox'}>{left === 0 ? 'Сумма сошлась' : left > 0 ? `Осталось разнести: ${money(left)} BYN` : `Лишнее: ${money(-left)} BYN`}</div>
+      <Err e={err} />
+      <button className="btn" disabled={busy} onClick={save}>{busy ? 'Проводим…' : 'Провести'}</button>
+      <button className="btn ghost" onClick={() => onClose(false)}>Отмена</button>
+    </Sheet>
   )
 }

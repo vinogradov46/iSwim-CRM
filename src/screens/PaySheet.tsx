@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { rpc, money, lw, perLesson, priceFor, PRICE, type Me } from '../lib'
 import { Sheet, Err, toast } from '../ui'
 
-type Plan = 'count' | 'single' | 'trial' | 'month' | 'annual'
+type Plan = 'count' | 'single' | 'trial' | 'month' | 'annual' | 'event'
 
 /** Оплата: тренер — наличные в кассу, офис — EPOS (или из входящей оплаты) */
 export default function PaySheet({ childId, me, onClose, incoming, plan: initPlan }: {
@@ -16,24 +16,27 @@ export default function PaySheet({ childId, me, onClose, incoming, plan: initPla
   const [method, setMethod] = useState<'cash' | 'epos'>(incoming ? 'epos' : me.role === 'coach' ? 'cash' : 'epos')
   const [err, setErr] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
+  const [note, setNote] = useState('')
   const [confirmOdd, setConfirmOdd] = useState(false)
 
-  const suggest = (p: Plan, k: number, f: boolean) => p === 'trial' ? PRICE.trial : p === 'single' ? PRICE.single : p === 'count' ? priceFor(k, f) : p === 'annual' ? PRICE.annual : 0
+  const suggest = (p: Plan, k: number, f: boolean) => p === 'event' ? 0 : p === 'trial' ? PRICE.trial : p === 'single' ? PRICE.single : p === 'count' ? priceFor(k, f) : p === 'annual' ? PRICE.annual : 0
   function upd(p: Plan, k: number, f: boolean) {
     setPlan(p); setN(k); setFam(f); setConfirmOdd(false); setErr(null)
-    if (!incoming) setAmt(p === 'month' ? '' : String(suggest(p, k, f)))
+    if (!incoming) setAmt(p === 'month' || p === 'event' ? '' : String(suggest(p, k, f)))
   }
   const calc = plan === 'count' ? `${n} × ${money(perLesson(n))} = ${money(priceFor(n))} BYN${fam ? ` − 10% = ${money(priceFor(n, true))} BYN` : ''}`
-    : plan === 'trial' ? `Пробное: ${PRICE.trial} BYN` : plan === 'single' ? `Разовое: ${PRICE.single} BYN` : plan === 'annual' ? `Годовой: ${PRICE.annual} BYN в месяц, 8 занятий каждый месяц` : 'Месяц: сумма вручную'
+    : plan === 'trial' ? `Пробное: ${PRICE.trial} BYN` : plan === 'single' ? `Разовое: ${PRICE.single} BYN` : plan === 'annual' ? `Годовой: ${PRICE.annual} BYN в месяц, 8 занятий каждый месяц` : plan === 'event' ? 'Соревнования и прочее: не влияет на абонемент и остаток занятий' : 'Месяц: сумма вручную'
   const a = parseFloat(amt.replace(',', '.'))
   const mismatch = incoming && plan === 'count' && Math.abs(priceFor(n, fam) - a) > 0.5
 
   async function save() {
     if (!(a > 0)) return setErr('Введите сумму больше нуля')
+    if (plan === 'event' && !note.trim()) return setErr('Укажите, за что оплата (например: Соревнования 22.11)')
     if (plan === 'count' && !incoming && Math.abs(priceFor(n, fam) - a) > 0.5 && !confirmOdd) { setConfirmOdd(true); return setErr(`Сумма ${money(a)} не совпадает с прайсом (${money(priceFor(n, fam))}). Нажмите «Записать» ещё раз, если всё верно`) }
     setBusy(true); setErr(null)
     try {
-      await rpc('record_payment', { p_child: childId, p_amount: a, p_method: method, p_plan_type: plan,
+      if (plan === 'event') await rpc('record_event_payment', { p_child: childId, p_amount: a, p_method: method, p_note: note, p_bot_payment: incoming?.id ?? null })
+      else await rpc('record_payment', { p_child: childId, p_amount: a, p_method: method, p_plan_type: plan,
         p_lessons: plan === 'count' ? n : plan === 'annual' ? 8 : null, p_family_discount: fam, p_bot_payment: incoming?.id ?? null })
       toast(`Записано: ${money(a)} BYN`); onClose(true)
     } catch (e: any) { setErr(e.message); setBusy(false) }
@@ -46,7 +49,7 @@ export default function PaySheet({ childId, me, onClose, incoming, plan: initPla
         : <div className="chips">{(['epos', 'cash'] as const).map((m) => <button key={m} className="chip" aria-pressed={method === m} onClick={() => setMethod(m)}>{m === 'epos' ? 'EPOS' : 'Касса'}</button>)}</div>}
       <div><span className="lbl">Что оплачено</span>
         <div className="chips">
-          {([['count', 'Абонемент'], ['single', 'Разовое'], ['trial', 'Пробное'], ['annual', 'Годовой'], ['month', 'Месяц']] as [Plan, string][]).map(([p, l]) =>
+          {([['count', 'Абонемент'], ['single', 'Разовое'], ['trial', 'Пробное'], ['annual', 'Годовой'], ['month', 'Месяц'], ['event', 'Соревнования / прочее']] as [Plan, string][]).map(([p, l]) =>
             <button key={p} className="chip" aria-pressed={plan === p} onClick={() => upd(p, n, fam)}>{l}</button>)}
         </div></div>
       {plan === 'count' && <div>
@@ -56,6 +59,7 @@ export default function PaySheet({ childId, me, onClose, incoming, plan: initPla
         <div className="chips" style={{ marginTop: 8 }}><button className="chip" aria-pressed={fam} onClick={() => upd(plan, n, !fam)}>Скидка 10% для семьи</button></div>
         <p className="sub" style={{ marginTop: 6 }}>Абонемент действует 30 дней</p>
       </div>}
+      {plan === 'event' && <div><label htmlFor="note">За что оплата</label><input id="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Соревнования 22.11" /></div>}
       <div className="calc">{calc}</div>
       <div><label htmlFor="amt">{incoming ? 'Пришло, BYN' : 'К оплате, BYN'}</label><input id="amt" inputMode="decimal" value={amt} readOnly={!!incoming} onChange={(e) => { setAmt(e.target.value); setConfirmOdd(false) }} /></div>
       {mismatch && <div className="warnbox">Пришло {money(a)}, а по прайсу {money(priceFor(n, fam))}. Проверьте, что оплачено.</div>}

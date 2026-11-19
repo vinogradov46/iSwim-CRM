@@ -40,17 +40,18 @@ export default function Children({ me }: { me: Me }) {
         </div>
       )}
       {card && <ChildCard key={card} id={card} me={me} onClose={() => { setCard(null); reload() }} />}
-      {add && <Enroll onClose={(ok) => { setAdd(false); if (ok) reload() }} />}
+      {add && <Enroll me={me} onClose={(ok) => { setAdd(false); if (ok) reload() }} />}
     </>
   )
 }
 
-function Enroll({ onClose }: { onClose: (ok: boolean) => void }) {
+function Enroll({ me, onClose }: { me: Me; onClose: (ok: boolean) => void }) {
   const groups = useLoad(async () => (await supabase.from('groups').select('id,title,start_time,capacity,branch_id,branches(name)').eq('active', true).order('start_time')).data || [], [])
   const [mode, setMode] = useState<'trial' | 'group' | 'reserve'>('trial')
   const [name, setName] = useState(''), [birth, setBirth] = useState(''), [parent, setParent] = useState(''), [phone, setPhone] = useState('+375 ')
   const [branch, setBranch] = useState<string | null>(null), [gid, setGid] = useState<string | null>(null)
   const [date, setDate] = useState(todayISO()), [src, setSrc] = useState('Instagram')
+  const [past, setPast] = useState(false), [pastDate, setPastDate] = useState('')
   const [err, setErr] = useState<string | null>(null), [busy, setBusy] = useState(false)
   const gs = (groups.data || []) as any[]
   const branches = [...new Map(gs.map((g) => [g.branch_id, g.branches?.name])).entries()]
@@ -64,7 +65,10 @@ function Enroll({ onClose }: { onClose: (ok: boolean) => void }) {
     if (mode === 'group' && full(gid)) return setErr('Группа заполнена. Запишите в резерв или увеличьте вместимость в «Группах»')
     setBusy(true); setErr(null)
     try {
-      const r: any = await rpc('enroll_child', { p_parent_name: parent, p_phone: phonePretty(phone), p_child_name: name, p_birth: birth || null, p_group: gid,
+      if (mode === 'trial' && past && !pastDate) throw new Error('Укажите дату пробного, которое уже было')
+      const r: any = mode === 'trial' && past
+        ? await rpc('enroll_past_trial', { p_parent_name: parent, p_phone: phonePretty(phone), p_child_name: name, p_birth: birth || null, p_group: gid, p_date: pastDate, p_source: src })
+        : await rpc('enroll_child', { p_parent_name: parent, p_phone: phonePretty(phone), p_child_name: name, p_birth: birth || null, p_group: gid,
         p_mode: mode, p_trial_date: mode === 'trial' ? date : null, p_source: src })
       toast(r.family_existed ? 'Записано. Семья найдена по телефону' : r.possible_duplicate ? `Записано. Внимание: уже есть «${r.possible_duplicate}»` : 'Записано')
       onClose(true)
@@ -81,9 +85,11 @@ function Enroll({ onClose }: { onClose: (ok: boolean) => void }) {
       <div><span className="lbl">Откуда узнали</span><Chips options={['Instagram', 'Google', 'Сайт', 'Рекомендация', 'Telegram'].map((x) => [x, x] as [string, string])} value={src} onChange={setSrc} /></div>
       <div><span className="lbl">Филиал</span><Chips options={branches.map(([id, n]) => [id, n] as [string, string])} value={branch} onChange={(v) => { setBranch(v); setGid(null) }} /></div>
       {branch && <div><span className="lbl">Группа</span><Chips options={gs.filter((g) => g.branch_id === branch).map((g) => { const x = load(g.id); return [g.id, `${gname(g.title, g.start_time)}${x ? ` · ${x.active_kids}/${x.capacity}` : ''}`] as [string, string] })} value={gid} onChange={setGid} /></div>}
-      {mode === 'trial' && <div><span className="lbl">Дата пробного</span><TrialDates group={gid} value={date} onChange={setDate} /></div>}
+      {mode === 'trial' && me.role !== 'coach' && <div><span className="lbl">Пробное</span><div className="chips"><button className="chip" aria-pressed={!past} onClick={() => setPast(false)}>Ещё будет</button><button className="chip" aria-pressed={past} onClick={() => setPast(true)}>Уже было</button></div></div>}
+      {mode === 'trial' && !past && <div><span className="lbl">Дата пробного</span><TrialDates group={gid} value={date} onChange={setDate} /></div>}
+      {mode === 'trial' && past && <div><label htmlFor="pd">Когда было пробное</label><input id="pd" type="date" max={todayISO()} value={pastDate} onChange={(e) => setPastDate(e.target.value)} /><p className="sub">Ребёнок запишется как «пробное, пришёл». Оплату пробного внесите в его карточке, потом можно принять абонемент.</p></div>}
       <Err e={err} />
-      <button className="btn" disabled={busy} onClick={save}>{mode === 'trial' ? 'Записать на пробное' : mode === 'group' ? 'Добавить в группу' : 'Записать в резерв'}</button>
+      <button className="btn" disabled={busy} onClick={save}>{mode === 'trial' ? (past ? 'Внести прошедшее пробное' : 'Записать на пробное') : mode === 'group' ? 'Добавить в группу' : 'Записать в резерв'}</button>
       <button className="btn ghost" onClick={() => onClose(false)}>Отмена</button>
     </Sheet>
   )

@@ -7,7 +7,7 @@ import AttCalendar from './AttCalendar'
 
 const LEFT = ['Переезд', 'Дорого', 'Неудобное время', 'Не понравилось', 'Болезнь', 'Другое']
 const LOST = ['Не понравилось', 'Дорого', 'Неудобное время', 'Не отвечает', 'Передумали', 'Другое']
-const PLAN: Record<string, string> = { count: 'абонемент', single: 'разовое', trial: 'пробное', month: 'месяц', annual: 'годовой', opening: 'стартовый остаток' }
+const PLAN: Record<string, string> = { count: 'абонемент', single: 'разовое', trial: 'пробное', month: 'месяц', annual: 'годовой', opening: 'стартовый остаток', event: 'соревнования / прочее' }
 const addDays = (n: number, from = todayISO()) => { const d = new Date(from + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
 
 const WD = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
@@ -99,7 +99,7 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
       <AttCalendar childId={id} office={office} onChanged={reload} />
       <div><span className="lbl">{office ? 'Оплаты' : 'Оплаты, принятые вами'}</span>
         <div className="hist">{data.payments.length ? data.payments.map((p: any) => <div key={p.id}>
-          <span>{dm(p.paid_at.slice(0, 10))} · {p.plan_type === 'count' ? `${p.lessons} зан.` : PLAN[p.plan_type] || p.plan_type}{p.cancelled ? ' · отменена' : ''}</span>
+          <span>{dm(p.paid_at.slice(0, 10))} · {p.plan_type === 'count' ? `${p.lessons} зан.` : p.plan_type === 'event' && p.note ? p.note : PLAN[p.plan_type] || p.plan_type}{p.cancelled ? ' · отменена' : ''}</span>
           <span style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
             <span style={p.cancelled ? { textDecoration: 'line-through' } : {}}>{money(p.amount)} · {p.method === 'cash' ? 'касса' : 'EPOS'}</span>
             {office && !p.cancelled && <button className="btn sm ghost" style={{ padding: '3px 8px' }} onClick={() => { setCancelId(p.id); setCancelWhy('') }}>Отменить</button>}
