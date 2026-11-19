@@ -99,7 +99,7 @@ export default function ChildCard({ id, onClose, me }: { id: string; onClose: ()
       <AttCalendar childId={id} office={office} onChanged={reload} />
       <div><span className="lbl">{office ? 'Оплаты' : 'Оплаты, принятые вами'}</span>
         <div className="hist">{data.payments.length ? data.payments.map((p: any) => <div key={p.id}>
-          <span>{dm(p.paid_at.slice(0, 10))} · {p.plan_type === 'count' ? `${p.lessons} зан.` : p.plan_type === 'event' && p.note ? p.note : PLAN[p.plan_type] || p.plan_type}{p.cancelled ? ' · отменена' : ''}</span>
+          <span>{dm(p.paid_at.slice(0, 10))} · {p.plan_type === 'count' ? `${p.lessons} зан.` : p.plan_type === 'event' && p.note ? p.note : PLAN[p.plan_type] || p.plan_type}{p.discount > 0 ? ` · скидка ${p.discount}%${p.discount_reason ? ' (' + p.discount_reason + ')' : ''}` : ''}{p.cancelled ? ' · отменена' : ''}</span>
           <span style={{ display: 'flex', gap: 6, alignItems: 'center', justifyContent: 'flex-end' }}>
             <span style={p.cancelled ? { textDecoration: 'line-through' } : {}}>{money(p.amount)} · {p.method === 'cash' ? 'касса' : 'EPOS'}</span>
             {office && !p.cancelled && <button className="btn sm ghost" style={{ padding: '3px 8px' }} onClick={() => { setCancelId(p.id); setCancelWhy('') }}>Отменить</button>}

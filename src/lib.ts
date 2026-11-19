@@ -59,10 +59,12 @@ export const lw = (n: number) => plural(n, 'занятие', 'занятия', '
 /** Цены: 1 занятие 45, 2–7 по 37,50, от 8 по 33,75 */
 export const PRICE = { trial: 25, single: 45, p2: 37.5, p8: 33.75, discount: 10, annual: 121 }
 export const perLesson = (n: number) => (n >= 8 ? PRICE.p8 : n >= 2 ? PRICE.p2 : PRICE.single)
-export const priceFor = (n: number, fam = false) => {
+export const priceFor = (n: number, disc: boolean | number = 0) => {
   const b = Math.round(n * perLesson(n) * 100) / 100
-  return fam ? Math.round(b * (100 - PRICE.discount)) / 100 : b
+  const pct = typeof disc === 'number' ? disc : disc ? PRICE.discount : 0
+  return pct ? Math.round(b * (100 - pct)) / 100 : b
 }
+export const DISCOUNTS = [0, 5, 10, 15, 20, 25, 30]
 
 /** Статус ребёнка в виде плашки */
 export function balanceState(c: { plan_kind: string; lessons_left: number; sub_end?: string | null; frozen_until?: string | null; paid_month?: string | null }) {
