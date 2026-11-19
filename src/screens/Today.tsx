@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { rpc, supabase, dateRu, todayISO, hm, dm, phonePretty, balanceState, gshort, gname, type Me } from '../lib'
+import { rpc, supabase, dateRu, todayISO, hm, dm, phonePretty, phoneE164, balanceState, gshort, gname, type Me } from '../lib'
 
 const addDays = (iso: string, n: number) => { const d = new Date(iso + 'T12:00:00'); d.setDate(d.getDate() + n); return d.toISOString().slice(0, 10) }
 import { useLoad, Loading, Err, Pill, Sheet, toast } from '../ui'
@@ -118,21 +118,62 @@ function SessionActions({ s, reload }: { s: Sess; reload: () => void }) {
   )
 }
 
-function Debts({ title, hint, items, tone, onCard }: { title: string; hint: string; items: any[] | undefined; tone: string; onCard: (id: string) => void }) {
+function remindText(d: any) {
+  const n = d.lessons_left
+  const what = n < 0 ? 'занятия закончились, последние посещения ещё не оплачены' : n === 0 ? 'занятия закончились' : 'остаётся 1 занятие'
+  return `Здравствуйте! По абонементу (${d.full_name}) ${what}. Продлить можно через EPOS или у тренера. Если уже оплатили, напишите, пожалуйста, ФИО плательщика, мы проверим. Спасибо!`
+}
+
+/** Напоминание родителю: текст + открыть чат в Telegram / Viber / SMS или скопировать. Отправляет человек. */
+function RemindSheet({ d, onClose }: { d: any; onClose: (sent: boolean) => void }) {
+  const [text, setText] = useState(remindText(d))
+  const [sent, setSent] = useState(false)
+  const ph = phoneE164(d.phone || '')
+  const enc = encodeURIComponent(text)
+  async function done() { if (sent) return; setSent(true); try { await rpc('mark_reminded', { p_child: d.child_id, p_text: text }) } catch (e: any) { toast(e.message) } }
+  async function copy() {
+    try { await navigator.clipboard.writeText(text); toast('Текст скопирован') } catch { toast('Не удалось скопировать: выделите текст вручную') }
+    done()
+  }
+  return (
+    <Sheet onClose={() => onClose(sent)}>
+      <h2>Напомнить родителю</h2>
+      <p className="sub">{d.full_name} · {phonePretty(d.phone) || 'телефон не указан'}</p>
+      <textarea rows={6} value={text} onChange={(e) => setText(e.target.value)} aria-label="Текст сообщения" />
+      {ph ? <div className="acts" style={{ flexWrap: 'wrap' }}>
+        <a className="btn sm okb" href={`https://t.me/${ph}`} target="_blank" rel="noreferrer" onClick={() => { navigator.clipboard?.writeText(text).catch(() => {}); done() }}>Telegram</a>
+        <a className="btn sm okb" href={`viber://chat?number=${encodeURIComponent(ph)}`} onClick={() => { navigator.clipboard?.writeText(text).catch(() => {}); done() }}>Viber</a>
+        <a className="btn sm okb" href={`sms:${ph}?&body=${enc}`} onClick={done}>SMS</a>
+        <button className="btn sm ghost" onClick={copy}>Скопировать текст</button>
+      </div> : <button className="btn sm ghost" onClick={copy}>Скопировать текст</button>}
+      <p className="note">Telegram и Viber открывают чат с номером родителя, текст при этом копируется: вставьте его и отправьте. SMS подставит текст сам. После нажатия отметим, что напоминание отправлено.</p>
+      <button className="btn ghost" onClick={() => onClose(sent)}>Закрыть</button>
+    </Sheet>
+  )
+}
+
+function Debts({ title, hint, items, tone, onCard, reload }: { title: string; hint: string; items: any[] | undefined; tone: string; onCard: (id: string) => void; reload: () => void }) {
   const [all, setAll] = useState(false)
+  const [rem, setRem] = useState<any | null>(null)
   if (!items?.length) return null
   const list = all ? items : items.slice(0, 10)
+  const recent = (d: any) => d.reminded && Date.now() - new Date(d.reminded).getTime() < 7 * 86400000
   return (
     <>
       <h2>{title} · {items.length}</h2>
       <p className="sub">{hint}</p>
       <div className="list">{list.map((d: any) => (
-        <button className="row" key={d.child_id} onClick={() => onCard(d.child_id)}>
-          <span className="grow"><span className="name">{d.full_name}</span><br /><span className="meta">{d.group || '—'}</span><br /><span className="meta phone">{phonePretty(d.phone)}</span></span>
-          <Pill c={tone}>{d.lessons_left < 0 ? `долг ${-d.lessons_left}` : `остаток ${d.lessons_left}`}</Pill>
-        </button>))}
+        <div className="miss" key={d.child_id}>
+          <button className="kidname" onClick={() => onCard(d.child_id)}><span className="name">{d.full_name}</span><br /><span className="meta">{d.group || '—'}</span><br /><span className="meta phone">{phonePretty(d.phone)}</span>
+            {d.reminded && <><br /><span className="meta">напоминали {dm(new Date(d.reminded).toISOString().slice(0, 10))}</span></>}</button>
+          <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+            <Pill c={tone}>{d.lessons_left < 0 ? `долг ${-d.lessons_left}` : `остаток ${d.lessons_left}`}</Pill>
+            <button className={`btn sm ${recent(d) ? 'ghost' : ''}`} onClick={() => setRem(d)}>{recent(d) ? 'Ещё раз' : 'Напомнить'}</button>
+          </span>
+        </div>))}
       </div>
       {items.length > 10 && <button className="btn sm ghost" onClick={() => setAll(!all)}>{all ? 'Свернуть' : `Показать всех (${items.length})`}</button>}
+      {rem && <RemindSheet d={rem} onClose={(sent) => { setRem(null); if (sent) reload() }} />}
     </>
   )
 }
@@ -197,8 +238,8 @@ function Inbox({ data, reload, onOpen }: { data: any; reload: () => void; onOpen
             </span>
           </div>))}
         </div></>}
-      <Debts title="Долг по занятиям" hint="Ребёнок отходил больше, чем оплачено. Если оплата уже была, но не внесена — проведите её в карточке." items={data.debtors} tone="p-bad" onCard={setCard} />
-      <Debts title="Абонемент заканчивается" hint="Остался 0–1 урок, а ребёнок ходил последние три недели. Самое время напомнить об оплате." items={data.ending} tone="p-warn" onCard={setCard} />
+      <Debts title="Долг по занятиям" hint="Ребёнок отходил больше, чем оплачено. Если оплата уже была, но не внесена — проведите её в карточке." items={data.debtors} tone="p-bad" onCard={setCard} reload={reload} />
+      <Debts title="Абонемент заканчивается" hint="Остался 0–1 урок, а ребёнок ходил последние три недели. Самое время напомнить об оплате." items={data.ending} tone="p-warn" onCard={setCard} reload={reload} />
       {(data.nodays > 0 || data.no_tg?.length > 0) && <>
         <h2>Порядок в данных</h2>
         <div className="list">
