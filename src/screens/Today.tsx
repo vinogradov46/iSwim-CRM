@@ -17,6 +17,11 @@ export default function Today({ me }: { me: Me }) {
   const office = me.role !== 'coach'
   const inbox = useLoad(() => (office ? rpc<any>('office_inbox') : Promise.resolve(null)), [office])
   const yday = addDays(todayISO(), -1)
+  const week = useLoad(async () => {
+    const days = Array.from({ length: 8 }, (_, i) => addDays(todayISO(), i))
+    const res = await Promise.all(days.map((d) => rpc<Sess[]>('sessions_on', { p_date: d }).catch(() => [] as Sess[])))
+    return days.map((d, i) => ({ d, n: res[i].filter((x) => x.status === 'planned').length }))
+  }, [])
   const prev = useLoad(() => (office ? Promise.resolve([] as Sess[]) : rpc<Sess[]>('sessions_on', { p_date: yday })), [office])
   const prevOpen = (prev.data || []).filter((s) => s.status === 'planned' && s.can_mark && s.expected > 0 && s.marked === 0)
 
@@ -31,6 +36,10 @@ export default function Today({ me }: { me: Me }) {
         <h2 className="grow" style={{ textTransform: 'capitalize' }}>{dateRu(day)}</h2>
         <input type="date" value={day} onChange={(e) => setDay(e.target.value)} style={{ width: 'auto' }} aria-label="Дата" />
       </div>
+      {(week.data || []).some((w) => w.n > 0) && <div className="chips" style={{ flexWrap: 'wrap' }} aria-label="Ближайшие занятия">
+        {(week.data || []).filter((w) => w.n > 0 || w.d === day).map((w) => <button key={w.d} className="chip" aria-pressed={w.d === day} onClick={() => setDay(w.d)}>
+          {w.d === todayISO() ? 'Сегодня' : `${['Вс', 'Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб'][new Date(w.d + 'T12:00:00').getDay()]} ${dm(w.d)}`}{w.n > 0 ? ` · ${w.n}` : ''}</button>)}
+      </div>}
       {office && (data || []).some((s) => s.status === 'planned') && <div className="acts"><button className="btn sm ghost" onClick={() => setDayOff(true)}>Отменить весь день…</button></div>}
       {dayOff && data && <CancelDay day={day} sessions={data} onClose={(ok) => { setDayOff(false); if (ok) { reload(); inbox.reload() } }} />}
       {office && late.length > 0 && <div className="warnbox">Не отмечено после занятия: {late.length}</div>}
