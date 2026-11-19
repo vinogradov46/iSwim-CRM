@@ -167,6 +167,15 @@ function Inbox({ data, reload, onOpen }: { data: any; reload: () => void; onOpen
             <button className="btn sm ghost" onClick={() => act('complete_task', { p_task: t.id }, 'Задача закрыта')}>Готово</button>
           </div>))}
         </div></>}
+      {data.auto_posted?.length > 0 && <>
+        <h2>Разнесено автоматически · {data.auto_posted.length}</h2>
+        <p className="sub">Оплаты, которые пришли из Telegram и сами провелись, потому что плательщик уже известен. Если что-то не так — отмените, оплата вернётся в очередь EPOS.</p>
+        <div className="list">{data.auto_posted.map((a: any) => (
+          <div className="miss" key={a.payment_id}>
+            <button className="kidname" onClick={() => setCard(a.child_id)}><span className="name">{a.full_name}</span><br /><span className="meta">{Number(a.amount)} BYN · {a.what} · {a.payer}</span></button>
+            <button className="btn sm ghost" onClick={() => { if (window.confirm('Отменить эту оплату? Она вернётся в очередь EPOS.')) act('cancel_payment', { p_payment: a.payment_id, p_reason: 'автоматическое разнесение: неверно' }, 'Оплата отменена, она в очереди EPOS') }}>Отменить</button>
+          </div>))}
+        </div></>}
       {data.trials_open?.length > 0 && <>
         <h2>Пробные без отметки · {data.trials_open.length}</h2>
         <p className="sub">Пробное прошло, а результата нет. Отметьте — и родителю уйдёт сообщение, а вам придёт задача.</p>
