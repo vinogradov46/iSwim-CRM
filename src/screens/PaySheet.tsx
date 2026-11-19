@@ -5,27 +5,15 @@ import { Sheet, Err, toast } from '../ui'
 type Plan = 'count' | 'single' | 'trial' | 'month' | 'annual' | 'event'
 const REASONS = ['ЕПАМ', 'Второй ребёнок', 'Друг', 'Акция']
 const off = (b: number, d: number) => Math.round(b * (100 - d)) / 100
-/** По сумме EPOS: подбираем тариф и скидку, если сумма не стандартная */
-function guess(amount: number): { plan: Plan; n: number; disc: number } | null {
-  const near = (x: number) => Math.abs(x - amount) <= 0.5
-  for (const d of DISCOUNTS) {
-    if (near(off(PRICE.trial, d))) return { plan: 'trial', n: 1, disc: d }
-    if (near(off(PRICE.single, d))) return { plan: 'single', n: 1, disc: d }
-    for (let n = 2; n <= 40; n++) if (near(priceFor(n, d))) return { plan: 'count', n, disc: d }
-  }
-  return null
-}
-
 /** Оплата: тренер — наличные в кассу, офис — EPOS (или из входящей оплаты) */
 export default function PaySheet({ childId, me, onClose, incoming, plan: initPlan }: {
   childId: string; me: Me; onClose: (ok: boolean) => void; plan?: Plan
   incoming?: { id: string; amount: number; payer: string | null; lessons: number | null }
 }) {
-  const g0 = incoming ? guess(incoming.amount) : null
   const office = me.role !== 'coach'
-  const [plan, setPlan] = useState<Plan>(g0?.plan ?? initPlan ?? 'count')
-  const [n, setN] = useState(g0?.n ?? (incoming?.lessons || 8))
-  const [disc, setDisc] = useState(g0?.disc ?? 0)
+  const [plan, setPlan] = useState<Plan>(initPlan ?? 'count')
+  const [n, setN] = useState(incoming?.lessons || 8)
+  const [disc, setDisc] = useState(0)
   const [reason, setReason] = useState('')
   const [amt, setAmt] = useState<string>(incoming ? String(incoming.amount) : initPlan === 'trial' ? String(PRICE.trial) : String(priceFor(8)))
   const [method, setMethod] = useState<'cash' | 'epos'>(incoming ? 'epos' : me.role === 'coach' ? 'cash' : 'epos')

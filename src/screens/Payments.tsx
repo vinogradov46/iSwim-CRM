@@ -169,7 +169,6 @@ function CashOverview() {
 function guessPlan(a: number): { plan: string; lessons: number; fam: boolean } | null {
   if (Math.abs(a - PRICE.trial) < 0.01) return { plan: 'trial', lessons: 1, fam: false }
   for (let n = 1; n <= 40; n++) if (Math.abs(priceFor(n, false) - a) <= 0.5) return { plan: n === 1 ? 'single' : 'count', lessons: n, fam: false }
-  for (let n = 2; n <= 40; n++) if (Math.abs(priceFor(n, true) - a) <= 0.5) return { plan: 'count', lessons: n, fam: true }
   return null
 }
 
