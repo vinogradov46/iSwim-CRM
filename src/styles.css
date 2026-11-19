@@ -198,3 +198,23 @@ input[type=file]{padding:8px}
 @media (min-width:1000px) and (prefers-reduced-motion:no-preference){.scrim.side .sheet{animation:side .18s ease-out}@keyframes side{from{transform:translateX(30px);opacity:.6}}}
 
 .marks>.mk:only-child{grid-column:1/-1}
+
+/* Журнал группы */
+.jr-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface);-webkit-overflow-scrolling:touch}
+table.jr{border-collapse:separate;border-spacing:0;width:max-content;min-width:100%;font-size:13px}
+table.jr th,table.jr td{padding:6px 4px;border-top:1px solid var(--line);text-align:center;vertical-align:middle;background:var(--surface)}
+table.jr thead th{border-top:0;font-size:11px;color:var(--muted);text-transform:none;letter-spacing:0;font-weight:600;background:var(--surface-2)}
+table.jr th small{font-weight:400}
+table.jr .jr-d{min-width:40px} table.jr .jr-d.x{text-decoration:line-through;opacity:.6} table.jr .jr-d.today{color:var(--accent)}
+table.jr .jr-n{position:sticky;left:0;z-index:2;text-align:left;min-width:132px;max-width:170px;padding-left:10px;box-shadow:1px 0 0 var(--line)}
+table.jr thead .jr-n{background:var(--surface-2)}
+table.jr .jr-p{position:sticky;right:0;z-index:2;min-width:84px;box-shadow:-1px 0 0 var(--line)}
+table.jr thead .jr-p{background:var(--surface-2)}
+.jr-name{background:none;border:0;padding:0;font:600 13px var(--body);color:var(--fg);text-align:left;cursor:pointer;line-height:1.25}
+.jr-sub{display:block;font-size:11px;line-height:1.2}
+.jr-b{width:34px;height:30px;border-radius:8px;border:1px solid transparent;background:none;font:700 13px var(--body);cursor:pointer;color:var(--muted)}
+.jr-b:disabled{cursor:default;opacity:.55}
+.jr-b.ok{background:var(--ok-soft);color:var(--ok)} .jr-b.bad{background:var(--bad-soft);color:var(--bad)} .jr-b.warn{background:var(--warn-soft);color:var(--warn);border-color:var(--warn)}
+.jr-b.off{background:var(--surface-2)} .jr-b.plan{color:var(--muted)} .jr-b.mut{color:var(--muted)}
+.jr-pay{background:none;border:0;padding:2px;cursor:pointer;font:inherit;color:inherit}
+table.jr tfoot td{font-weight:600}

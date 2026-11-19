@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { rpc, supabase, hm, gshort, type Me } from '../lib'
 import { useLoad, Loading, Err, Sheet, Pill, toast } from '../ui'
+import GroupJournal from './GroupJournal'
 
 type G = { id: string; branch_id: string; branch: string; title: string | null; pool: 'big' | 'small'; weekdays: number[]; start_time: string; duration_min: number
   capacity: number; coach_id: string | null; coach_name: string | null; active_kids: number; reserve_kids: number; active: boolean }
@@ -11,12 +12,14 @@ const days = (w: number[]) => w.map((d) => DAYS[d - 1]).join('/')
 export default function Groups({ me, onBack }: { me: Me; onBack: () => void }) {
   const { data, error, reload } = useLoad(() => rpc<G[]>('groups_overview'), [])
   const [edit, setEdit] = useState<G | 'new' | null>(null)
+  const [jr, setJr] = useState<G | null>(null)
   const [branch, setBranch] = useState<string>('all')
   const todo = useLoad(() => rpc<{ group_id: string; n: number }[]>('days_todo'), [])
   const todoN = new Map((todo.data || []).map((t) => [t.group_id, t.n]))
   const todoAll = [...todoN.values()].reduce((a, b) => a + b, 0)
   const list = (data || []).filter((g) => branch === 'all' || g.branch_id === branch)
   const branches = [...new Map((data || []).map((g) => [g.branch_id, g.branch])).entries()]
+  if (jr) return <GroupJournal g={jr} me={me} onBack={() => setJr(null)} />
   return (
     <>
       <button className="back" onClick={onBack}>← Назад</button>
@@ -33,18 +36,20 @@ export default function Groups({ me, onBack }: { me: Me; onBack: () => void }) {
         {list.map((g) => {
           const full = g.active_kids >= g.capacity
           return (
-            <button className="row" key={g.id} onClick={() => setEdit(g)} style={g.active ? {} : { opacity: 0.55 }}>
-              <span className="time">{hm(g.start_time)}</span>
-              <span className="grow"><span className="name">{g.branch} · {gshort(g.title) || days(g.weekdays)}</span><br />
+            <div className="row" key={g.id} style={g.active ? {} : { opacity: 0.55 }}>
+              <button className="time" onClick={() => setJr(g)} aria-label="Журнал группы" style={{ background: 'none', border: 0, font: 'inherit', color: 'inherit', cursor: 'pointer' }}>{hm(g.start_time)}</button>
+              <button className="grow" onClick={() => setJr(g)} style={{ background: 'none', border: 0, font: 'inherit', color: 'inherit', textAlign: 'left', cursor: 'pointer', padding: 0 }}><span className="name">{g.branch} · {gshort(g.title) || days(g.weekdays)}</span><br />
                 <span className="meta">{days(g.weekdays)} · {g.duration_min} мин · {g.pool === 'big' ? 'большая вода' : 'малая вода'} · {g.coach_name || 'без тренера'}</span>
-                {g.reserve_kids > 0 && <><br /><span className="meta">В резерве: {g.reserve_kids}</span></>}</span>
+                {g.reserve_kids > 0 && <><br /><span className="meta">В резерве: {g.reserve_kids}</span></>}</button>
               <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                 {!g.active ? <Pill c="p-mut">закрыта</Pill> : <Pill c={full ? 'p-bad' : 'p-ok'}>{g.active_kids}/{g.capacity}</Pill>}
                 {(todoN.get(g.id) || 0) > 0 && <Pill c="p-warn">дни: {todoN.get(g.id)}</Pill>}
+                <button className="btn sm ghost" onClick={() => setEdit(g)}>Изменить</button>
               </span>
-            </button>)
+            </div>)
         })}
       </div>}
+      <p className="note">Нажмите на группу — откроется журнал: список детей, посещения по датам и оплата. Кнопка «Изменить» — расписание, вместимость, дни детей.</p>
       <p className="note">Если группа заполнена (красная), нового ребёнка туда не записать — только в резерв. Чтобы добавить места, откройте группу и увеличьте вместимость.</p>
       {edit && <EditGroup g={edit === 'new' ? null : edit} me={me} onClose={(ok) => { setEdit(null); todo.reload(); if (ok) reload() }} />}
     </>
