@@ -371,6 +371,12 @@ function GuestSheet({ session, onClose }: { session: string; onClose: (ok: boole
   const [q, setQ] = useState('')
   const { data, error } = useLoad(() => rpc<{ child_id: string; full_name: string; groups: string | null; lessons_left: number; plan_kind: string; makeup_credits: number; other_branch: boolean }[]>('guest_candidates', { p_session: session, p_q: q }), [q])
   const [busy, setBusy] = useState<string | null>(null)
+  const [miss, setMiss] = useState(false), [mname, setMname] = useState('')
+  async function report() {
+    setBusy('report')
+    try { await rpc('report_missing_child', { p_session: session, p_name: mname }); toast('Передано администратору. Она найдёт ребёнка и вернёт в группу'); onClose(false) }
+    catch (e: any) { toast(e.message); setBusy(null) }
+  }
   async function add(cid: string, name: string) {
     setBusy(cid)
     try { const r: any = await rpc('add_guest', { p_session: session, p_child: cid }); toast(r?.debt ? `${name}: отмечен, занятие в долг` : `${name}: отмечен «был»`); onClose(true) }
@@ -390,6 +396,11 @@ function GuestSheet({ session, onClose }: { session: string; onClose: (ok: boole
           <Pill c={k.lessons_left > 0 ? 'p-ok' : 'p-bad'}>{k.lessons_left > 0 ? `ост. ${k.lessons_left}` : k.lessons_left < 0 ? `долг ${-k.lessons_left}` : '0'}</Pill>
         </button>)}
       </div>}
+      {!miss ? <button className="btn ghost" onClick={() => { setMiss(true); setMname(q) }}>Ребёнка нет в списке? Сообщить администратору</button> : <>
+        <p className="sub">Напишите фамилию и имя. Администратор получит задачу, найдёт карточку (даже если ребёнок числится ушедшим), вернёт в группу, и вы сможете его отметить.</p>
+        <input placeholder="Фамилия и имя ребёнка" value={mname} onChange={(e) => setMname(e.target.value)} />
+        <button className="btn" disabled={!!busy || mname.trim().length < 2} onClick={report}>Отправить администратору</button>
+      </>}
       <button className="btn ghost" onClick={() => onClose(false)}>Отмена</button>
     </Sheet>
   )
