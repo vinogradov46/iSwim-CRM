@@ -9,12 +9,13 @@ const DAYS = ['Пн', 'Вт', 'Ср', 'Чт', 'Пт', 'Сб', 'Вс']
 const days = (w: number[]) => w.map((d) => DAYS[d - 1]).join('/')
 
 /** Группы: вместимость, расписание, новые группы. Офис. */
-export default function Groups({ me, onBack }: { me: Me; onBack: () => void }) {
+export default function Groups({ me, onBack }: { me: Me; onBack?: () => void }) {
+  const office = me.role !== 'coach'
   const { data, error, reload } = useLoad(() => rpc<G[]>('groups_overview'), [])
   const [edit, setEdit] = useState<G | 'new' | null>(null)
   const [jr, setJr] = useState<G | null>(null)
   const [branch, setBranch] = useState<string>('all')
-  const todo = useLoad(() => rpc<{ group_id: string; n: number }[]>('days_todo'), [])
+  const todo = useLoad(() => (me.role === 'coach' ? Promise.resolve([] as { group_id: string; n: number }[]) : rpc<{ group_id: string; n: number }[]>('days_todo')), [])
   const todoN = new Map((todo.data || []).map((t) => [t.group_id, t.n]))
   const todoAll = [...todoN.values()].reduce((a, b) => a + b, 0)
   const list = (data || []).filter((g) => branch === 'all' || g.branch_id === branch)
@@ -22,10 +23,10 @@ export default function Groups({ me, onBack }: { me: Me; onBack: () => void }) {
   if (jr) return <GroupJournal g={jr} me={me} onBack={() => setJr(null)} />
   return (
     <>
-      <button className="back" onClick={onBack}>← Назад</button>
-      <h2>Группы и расписание</h2>
-      <button className="btn" onClick={() => setEdit('new')}>+ Новая группа</button>
-      {todoAll > 0 && <div className="warnbox">Не указаны дни у {todoAll} детей в группах с несколькими днями. Пока дни не указаны, программа считает, что ребёнок ходит на все занятия, и ночью может поставить ложный пропуск. Откройте группу с пометкой «дни: N» и отметьте, кто когда ходит.</div>}
+      {onBack && <button className="back" onClick={onBack}>← Назад</button>}
+      <h2>{office ? 'Группы и расписание' : 'Мои группы'}</h2>
+      {office && <button className="btn" onClick={() => setEdit('new')}>+ Новая группа</button>}
+      {office && todoAll > 0 && <div className="warnbox">Не указаны дни у {todoAll} детей в группах с несколькими днями. Пока дни не указаны, программа считает, что ребёнок ходит на все занятия, и ночью может поставить ложный пропуск. Откройте группу с пометкой «дни: N» и отметьте, кто когда ходит.</div>}
       {branches.length > 1 && <div className="chips">
         <button className="chip" aria-pressed={branch === 'all'} onClick={() => setBranch('all')}>Все</button>
         {branches.map(([id, n]) => <button key={id} className="chip" aria-pressed={branch === id} onClick={() => setBranch(id)}>{n}</button>)}
@@ -44,13 +45,15 @@ export default function Groups({ me, onBack }: { me: Me; onBack: () => void }) {
               <span style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 4 }}>
                 {!g.active ? <Pill c="p-mut">закрыта</Pill> : <Pill c={full ? 'p-bad' : 'p-ok'}>{g.active_kids}/{g.capacity}</Pill>}
                 {(todoN.get(g.id) || 0) > 0 && <Pill c="p-warn">дни: {todoN.get(g.id)}</Pill>}
-                <button className="btn sm ghost" onClick={() => setEdit(g)}>Изменить</button>
+                {office && <button className="btn sm ghost" onClick={() => setEdit(g)}>Изменить</button>}
               </span>
             </div>)
         })}
       </div>}
-      <p className="note">Нажмите на группу — откроется журнал: список детей, посещения по датам и оплата. Кнопка «Изменить» — расписание, вместимость, дни детей.</p>
-      <p className="note">Если группа заполнена (красная), нового ребёнка туда не записать — только в резерв. Чтобы добавить места, откройте группу и увеличьте вместимость.</p>
+      {office ? <>
+        <p className="note">Нажмите на группу — откроется журнал: список детей, посещения по датам и оплата. Кнопка «Изменить» — расписание, вместимость, дни детей.</p>
+        <p className="note">Если группа заполнена (красная), нового ребёнка туда не записать — только в резерв. Чтобы добавить места, откройте группу и увеличьте вместимость.</p>
+      </> : <p className="note">Нажмите на группу — откроется журнал за месяц: все дети, как они ходят по датам и сколько занятий осталось. Число рядом с группой — сколько детей занимается из мест.</p>}
       {edit && <EditGroup g={edit === 'new' ? null : edit} me={me} onClose={(ok) => { setEdit(null); todo.reload(); if (ok) reload() }} />}
     </>
   )

@@ -34,6 +34,8 @@ function sym(m: Mark | undefined, s: Ses, k: Kid, today: string): { t: string; c
 /** Журнал группы: дети × даты, посещения и оплата. Офис. */
 export default function GroupJournal({ g, me, onBack }: { g: JGroup; me: Me; onBack: () => void }) {
   const today = todayISO()
+  const office = me.role !== 'coach'
+  const yday = new Date(new Date(today + 'T12:00:00').getTime() - 864e5).toISOString().slice(0, 10)
   const [month, setMonth] = useState(today.slice(0, 7))
   const { data, error, reload } = useLoad(() => rpc<J>('group_journal', { p_group: g.id, p_month: month + '-01' }), [g.id, month])
   const [cell, setCell] = useState<{ k: Kid; s: Ses } | null>(null)
@@ -98,9 +100,9 @@ export default function GroupJournal({ g, me, onBack }: { g: JGroup; me: Me; onB
                       {k.enr === 'reserve' ? 'резерв' : k.enr === 'guest' ? 'из другой группы' : k.child_status === 'trial' ? 'пробное' : multi ? (k.days && k.days.length ? 'только ' + k.days.map((d) => WD[d - 1]).join('/') : 'все дни') : ''}
                     </span>
                   </td>
-                  {ses.map((s) => { const x = sym(markOf(k, s), s, k, today); const can = s.status !== 'cancelled' && s.date <= today
+                  {ses.map((s) => { const x = sym(markOf(k, s), s, k, today); const can = s.status !== 'cancelled' && s.date <= today && (office || s.date >= yday)
                     return <td key={s.id} className="jr-c"><button className={`jr-b ${x.c}`} title={x.hint} aria-label={`${k.full_name} ${dm(s.date)}: ${x.hint}`} disabled={!can} onClick={() => setCell({ k, s })}>{x.t}</button></td> })}
-                  <td className="jr-p"><button className="jr-pay" onClick={() => setPay(k)}>
+                  <td className="jr-p"><button className="jr-pay" disabled={!office} onClick={() => setPay(k)}>
                     {k.state === 'trial' ? <Pill c="p-acc">пробное</Pill>
                       : k.state === 'paid' ? <Pill c="p-ok">{money(k.paid_sum)}</Pill>
                       : k.state === 'balance' ? <Pill c="p-ok">ост. {k.lessons_left}</Pill>
@@ -116,7 +118,7 @@ export default function GroupJournal({ g, me, onBack }: { g: JGroup; me: Me; onB
               <td className="jr-p" />
             </tr></tfoot>
           </table></div>}
-        <p className="note">✓ был · ✗ не был · Б болеет · П предупредил · ОС/ОБ отработка по справке / без справки · ? нет отметки. Нажмите на клетку, чтобы поправить отметку, на сумму — чтобы провести оплату, на имя — открыть карточку ребёнка. Пустые клетки: ребёнок в этот день не ходит.</p>
+        <p className="note">✓ был · ✗ не был · Б болеет · П предупредил · ОС/ОБ отработка по справке / без справки · ? нет отметки. {office ? 'Нажмите на клетку, чтобы поправить отметку, на сумму — чтобы провести оплату, на имя — открыть карточку ребёнка.' : 'Отмечать можно занятие за сегодня и вчера, более ранние исправляет администратор. Нажмите на имя — откроется карточка ребёнка.'} Пустые клетки: ребёнок в этот день не ходит.</p>
       </>}
 
       {cell && <Sheet onClose={() => setCell(null)}>

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { supabase, rpc, phoneE164, cleanError, type Me } from './lib'
 import { Toaster, Err, Loading } from './ui'
 import Today from './screens/Today'
+import Groups from './screens/Groups'
 import Children from './screens/Children'
 import Payments from './screens/Payments'
 import Cash from './screens/Cash'
@@ -12,7 +13,7 @@ import { TgButton } from './screens/Tg'
 
 const ROLE: Record<string, string> = { director: 'Директор', admin: 'Администратор', coach: 'Тренер' }
 const TABS: Record<string, [string, string][]> = {
-  coach: [['today', 'Сегодня'], ['kids', 'Дети'], ['cash', 'Касса']],
+  coach: [['today', 'Сегодня'], ['kids', 'Дети'], ['groups', 'Группы'], ['cash', 'Касса']],
   admin: [['today', 'Сегодня'], ['kids', 'Дети'], ['pay', 'Оплаты']],
   director: [['today', 'Сегодня'], ['kids', 'Дети'], ['pay', 'Оплаты'], ['salary', 'Зарплата'], ['team', 'Команда']],
 }
@@ -44,7 +45,7 @@ export default function App() {
   if (me.must_change_password) return <div className="app"><NewPassword onDone={loadMe} /></div>
 
   const tabs = me.role === 'coach' && me.indiv_enabled ? [...TABS.coach.slice(0, 2), ['indiv', 'Индивид.'] as [string, string], ...TABS.coach.slice(2)] : TABS[me.role]
-  const body = tab === 'today' ? <Today me={me} /> : tab === 'kids' ? <Children me={me} /> : tab === 'pay' ? <Payments me={me} />
+  const body = tab === 'today' ? <Today me={me} /> : tab === 'kids' ? <Children me={me} /> : tab === 'groups' ? <Groups me={me} /> : tab === 'pay' ? <Payments me={me} />
     : tab === 'cash' ? <Cash me={me} /> : tab === 'salary' ? <Salary /> : tab === 'indiv' ? <Indiv me={me} /> : <Staff />
   return (
     <>
