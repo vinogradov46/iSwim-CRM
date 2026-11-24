@@ -39,6 +39,7 @@ export default function PaySheet({ childId, me, onClose, incoming, plan: initPla
 
   async function save() {
     if (!(a > 0)) return setErr('Введите сумму больше нуля')
+    if (office && dd > 0 && !reason.trim()) return setErr('Укажите причину скидки')
     if (plan === 'event' && !note.trim()) return setErr('Укажите, за что оплата (например: Соревнования 22.11)')
     if (plan === 'count' && !incoming && Math.abs(expected - a) > 0.5 && !confirmOdd) { setConfirmOdd(true); return setErr(`Сумма ${money(a)} не совпадает с прайсом (${money(expected)}). Нажмите «Записать» ещё раз, если всё верно`) }
     setBusy(true); setErr(null)
@@ -71,7 +72,7 @@ export default function PaySheet({ childId, me, onClose, incoming, plan: initPla
         <div className="chips">{DISCOUNTS.map((d) => <button key={d} className="chip" aria-pressed={disc === d} onClick={() => upd(plan, n, d)}>{d ? `${d}%` : 'Без скидки'}</button>)}</div>
         {disc > 0 && <>
           <div className="chips" style={{ marginTop: 8 }}>{REASONS.map((r) => <button key={r} className="chip" aria-pressed={reason === r} onClick={() => setReason(reason === r ? '' : r)}>{r}</button>)}</div>
-          <input style={{ marginTop: 8 }} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Причина скидки (необязательно)" aria-label="Причина скидки" />
+          <input style={{ marginTop: 8 }} value={reason} onChange={(e) => setReason(e.target.value)} placeholder="Причина скидки (обязательно)" aria-label="Причина скидки" />
         </>}</div>}
       {plan === 'event' && <div><label htmlFor="note">За что оплата</label><input id="note" value={note} onChange={(e) => setNote(e.target.value)} placeholder="Соревнования 22.11" /></div>}
       <div className="calc">{calc}</div>
