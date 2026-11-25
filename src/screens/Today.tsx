@@ -49,10 +49,6 @@ export default function Today({ me }: { me: Me }) {
           <span className="time">{hm(s.start_time)}</span><span className="grow"><span className="name">{s.branch} · {gshort(s.title)}</span><br /><span className="meta">никто не отмечен</span></span><Pill c="p-warn">Отметить</Pill></button>)}</div>
       </div>}
       <Err e={error} />
-      {hidden.length > 0 && <>
-        <button className="btn sm ghost" onClick={() => setShowNoSub(!showNoSub)}>{showNoSub ? 'Скрыть детей без абонемента' : `Без абонемента: ${hidden.length} — показать`}</button>
-        {!showNoSub && <p className="note">Эти дети не в списке. Если кто-то из них пришёл — нажмите «показать» и отметьте «Был». Тех, кого не отметили, программа в пропуски не запишет.</p>}
-      </>}
       {!data ? <Loading /> : (
         <div className="list">
           {data.length === 0 && <div className="row meta">В этот день занятий нет</div>}
@@ -314,6 +310,10 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
       {!coachAuto && canMark && s?.ended && unmarked > 0 && rows.some((c) => c.mark) && <div className="warnbox">Не отмечено: {unmarked}. Отметьте каждого — «был» или «не был», иначе пропуск не учтётся.{me.role === 'coach' && day < todayISO() ? ' Сегодня последний день, когда можно отметить.' : ''}</div>}
       {canMark && <button className="btn ghost" onClick={() => setGuest(true)}>+ Пришёл ребёнок не из этой группы (отработка)</button>}
       {canMark && unmarked > 0 && <button className="btn okb" onClick={allHere}>Все были ({unmarked}), потом исправить отсутствующих</button>}
+      {hidden.length > 0 && <>
+        <button className="btn sm ghost" onClick={() => setShowNoSub(!showNoSub)}>{showNoSub ? 'Скрыть детей без абонемента' : `Без абонемента: ${hidden.length} — показать`}</button>
+        {!showNoSub && <p className="note">Эти дети не в списке. Если кто-то из них пришёл — нажмите «показать» и отметьте «Был». Тех, кого не отметили, программа в пропуски не запишет.</p>}
+      </>}
       {!data ? <Loading /> : (
         <div className="list">
           {rows.map((c) => {
