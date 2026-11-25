@@ -49,6 +49,10 @@ export default function Today({ me }: { me: Me }) {
           <span className="time">{hm(s.start_time)}</span><span className="grow"><span className="name">{s.branch} · {gshort(s.title)}</span><br /><span className="meta">никто не отмечен</span></span><Pill c="p-warn">Отметить</Pill></button>)}</div>
       </div>}
       <Err e={error} />
+      {hidden.length > 0 && <>
+        <button className="btn sm ghost" onClick={() => setShowNoSub(!showNoSub)}>{showNoSub ? 'Скрыть детей без абонемента' : `Без абонемента: ${hidden.length} — показать`}</button>
+        {!showNoSub && <p className="note">Эти дети не в списке. Если кто-то из них пришёл — нажмите «показать» и отметьте «Был». Тех, кого не отметили, программа в пропуски не запишет.</p>}
+      </>}
       {!data ? <Loading /> : (
         <div className="list">
           {data.length === 0 && <div className="row meta">В этот день занятий нет</div>}
@@ -296,7 +300,8 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
   // без абонемента (остаток ≤ 0) и ещё не отмечен — в списке не показываем
   const noSub = (c: R) => c.kind === 'group' && c.plan_kind === 'count' && c.lessons_left <= 0 && !c.mark
   const hidden = all.filter(noSub)
-  const rows = showNoSub ? all : all.filter((c) => !noSub(c))
+  const visible = all.filter((c) => !noSub(c))
+  const rows = showNoSub ? [...visible, ...hidden] : visible
   const unmarked = rows.filter((c) => c.kind === 'group' && !c.mark && !noSub(c) && !(c.frozen_until && c.frozen_until > day)).length
   return (
     <div className="col narrow">
@@ -351,10 +356,6 @@ function Session({ id, day, me, onBack }: { id: string; day: string; me: Me; onB
           {rows.length === 0 && <div className="row meta">{hidden.length ? 'Все дети группы без абонемента' : 'В группе пока никого'}</div>}
         </div>
       )}
-      {hidden.length > 0 && <>
-        <button className="btn sm ghost" onClick={() => setShowNoSub(!showNoSub)}>{showNoSub ? 'Скрыть детей без абонемента' : `Без абонемента: ${hidden.length} — показать`}</button>
-        {!showNoSub && <p className="note">Эти дети не в списке. Если кто-то из них пришёл — нажмите «показать» и отметьте «Был». Тех, кого не отметили, программа в пропуски не запишет.</p>}
-      </>}
       {canMark && rows.length > 6 && <button className="btn ghost" onClick={() => setGuest(true)}>+ Пришёл ребёнок не из этой группы (отработка)</button>}
       {guest && <GuestSheet session={id} onClose={(ok) => { setGuest(false); if (ok) reload() }} />}
       {auto ? <p className="note">«Был» списывает занятие. Кого не отметили — через день программа поставит «не был» и передаст администратору: она решит, перенос по справке или отработка в другой день. Бесплатная отработка не списывается.</p> :
