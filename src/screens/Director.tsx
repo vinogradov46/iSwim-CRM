@@ -48,7 +48,7 @@ export function Journal() {
     bot_ignored: 'Платёж EPOS пропущен', bot_matched: 'Платёж EPOS привязан', import_journal: 'Импорт журнала', child_edit: 'Изменены данные ребёнка', freeze: 'Заморозка', unfreeze: 'Разморозка',
     leave: 'Ушёл', return: 'Вернулся', move: 'Перевод в группу', add_group: 'Добавлена группа', remove_group: 'Убрана группа', to_reserve: 'В резерв', from_reserve: 'Из резерва',
     retrial: 'Перенос пробного', task: 'Напоминание', set_balance: 'Корректировка баланса', set_sub_end: 'Срок абонемента', cert: 'Справка', edit: 'Изменены данные ребёнка',
-    staff_login: 'Выдан вход сотруднику', indiv_add: 'Индивидуальное занятие', indiv_edit: 'Изменено индивидуальное', indiv_cancel: 'Удалено индивидуальное', staff_indiv: 'Индивидуальные: настройка', enroll_days: 'Дни посещения', groups_coach: 'Тренер назначен на группы' }
+    staff_login: 'Выдан вход сотруднику', indiv_add: 'Индивидуальное занятие', indiv_plan: 'Запись на индивидуальное', indiv_done: 'Индивидуальное проведено', indiv_edit: 'Изменено индивидуальное', indiv_cancel: 'Удалено индивидуальное', staff_indiv: 'Индивидуальные: настройка', enroll_days: 'Дни посещения', groups_coach: 'Тренер назначен на группы' }
   const label = (a: string) => A[a] || (a.startsWith('child_') && A[a.slice(6)]) || a
   return (
     <>

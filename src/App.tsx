@@ -14,8 +14,8 @@ import { TgButton } from './screens/Tg'
 const ROLE: Record<string, string> = { director: 'Директор', admin: 'Администратор', coach: 'Тренер' }
 const TABS: Record<string, [string, string][]> = {
   coach: [['today', 'Сегодня'], ['kids', 'Дети'], ['groups', 'Группы'], ['cash', 'Касса']],
-  admin: [['today', 'Сегодня'], ['kids', 'Дети'], ['pay', 'Оплаты']],
-  director: [['today', 'Сегодня'], ['kids', 'Дети'], ['pay', 'Оплаты'], ['salary', 'Зарплата'], ['team', 'Команда']],
+  admin: [['today', 'Сегодня'], ['kids', 'Дети'], ['pay', 'Оплаты'], ['indiv', 'Индивид.']],
+  director: [['today', 'Сегодня'], ['kids', 'Дети'], ['pay', 'Оплаты'], ['indiv', 'Индивид.'], ['salary', 'Зарплата'], ['team', 'Команда']],
 }
 /** Вход по телефону: в Supabase это e-mail вида 375291234567@staff.iswim.by */
 const staffEmail = (e164: string) => `${e164.slice(1)}@staff.iswim.by`
