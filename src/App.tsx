@@ -14,8 +14,8 @@ import { TgButton } from './screens/Tg'
 const ROLE: Record<string, string> = { director: 'Директор', admin: 'Администратор', coach: 'Тренер' }
 const TABS: Record<string, [string, string][]> = {
   coach: [['today', 'Сегодня'], ['kids', 'Дети'], ['groups', 'Группы'], ['cash', 'Касса']],
-  admin: [['today', 'Сегодня'], ['kids', 'Дети'], ['pay', 'Оплаты'], ['indiv', 'Индивид.']],
-  director: [['today', 'Сегодня'], ['kids', 'Дети'], ['pay', 'Оплаты'], ['indiv', 'Индивид.'], ['salary', 'Зарплата'], ['team', 'Команда']],
+  admin: [['today', 'Сегодня'], ['kids', 'Дети'], ['pay', 'Оплаты'], ['indiv', 'Индивидуальные']],
+  director: [['today', 'Сегодня'], ['kids', 'Дети'], ['pay', 'Оплаты'], ['indiv', 'Индивидуальные'], ['salary', 'Зарплата'], ['team', 'Команда']],
 }
 /** Вход по телефону: в Supabase это e-mail вида 375291234567@staff.iswim.by */
 const staffEmail = (e164: string) => `${e164.slice(1)}@staff.iswim.by`
@@ -44,7 +44,7 @@ export default function App() {
   if (!me) return <div className="app"><Login onIn={loadMe} error={error} /></div>
   if (me.must_change_password) return <div className="app"><NewPassword onDone={loadMe} /></div>
 
-  const tabs = me.role === 'coach' && me.indiv_enabled ? [...TABS.coach.slice(0, 2), ['indiv', 'Индивид.'] as [string, string], ...TABS.coach.slice(2)] : TABS[me.role]
+  const tabs = me.role === 'coach' && me.indiv_enabled ? [...TABS.coach.slice(0, 2), ['indiv', 'Индивидуальные'] as [string, string], ...TABS.coach.slice(2)] : TABS[me.role]
   const body = tab === 'today' ? <Today me={me} /> : tab === 'kids' ? <Children me={me} /> : tab === 'groups' ? <Groups me={me} /> : tab === 'pay' ? <Payments me={me} />
     : tab === 'cash' ? <Cash me={me} /> : tab === 'salary' ? <Salary /> : tab === 'indiv' ? <Indiv me={me} /> : <Staff />
   return (
@@ -63,7 +63,7 @@ export default function App() {
         <div className="side-brand">i<span>Swim</span> CRM</div>
         <div className="side-me"><div className="name">{me.full_name}</div><div className="meta">{ROLE[me.role]}</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}><TgButton /><button className="btn sm ghost" onClick={() => supabase.auth.signOut()}>Выйти</button></div></div>
-        <div className="tabs-in" style={{ gridTemplateColumns: `repeat(${tabs.length},1fr)` }}>
+        <div className="tabs-in" style={{ gridTemplateColumns: tabs.map(([, l]) => `${Math.max(l.length, 5)}fr`).join(' '), fontSize: tabs.length > 5 ? 11 : undefined }}>
           {tabs.map(([id, l]) => (
             <button key={id} className="tab" aria-current={tab === id ? 'page' : undefined} onClick={() => { setTab(id); window.scrollTo(0, 0) }}>{l}</button>
           ))}
