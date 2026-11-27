@@ -7,7 +7,7 @@ import PaySheet from './PaySheet'
 import ChildCard from './ChildCard'
 
 type Sess = { session_id: string; branch: string; title: string; start_time: string; coach_name: string; substitute_name: string | null;
-  status: string; cancel_reason: string | null; capacity: number; expected: number; marked: number; trials: number; can_mark: boolean; ended: boolean; coach_id: string; substitute_id: string | null }
+  status: string; cancel_reason: string | null; capacity: number; expected: number; marked: number; trials: number; can_mark: boolean; ended: boolean; present: number; auto_absent: number; coach_id: string; substitute_id: string | null }
 
 export default function Today({ me }: { me: Me }) {
   const [day, setDay] = useState(todayISO())
@@ -60,9 +60,9 @@ export default function Today({ me }: { me: Me }) {
                   <span className="time">{hm(s.start_time)}</span>
                   <span className="grow"><span className="name">{s.branch} · {gshort(s.title)}</span><br />
                     <span className="meta">{s.substitute_name ? `${s.substitute_name} (замена за ${s.coach_name})` : s.coach_name || 'тренер не назначен'}
-                      {s.status === 'cancelled' ? ` · отменено: ${s.cancel_reason}` : ` · ${s.expected} детей${s.trials ? ` · пробных ${s.trials}` : ''}`}</span></span>
+                      {s.status === 'cancelled' ? ` · отменено: ${s.cancel_reason}` : ` · ${s.ended && s.marked > 0 ? s.marked : s.expected} детей${s.trials ? ` · пробных ${s.trials}` : ''}${s.auto_absent ? ` · «не был» автоматом: ${s.auto_absent}` : ''}`}</span></span>
                   {s.status === 'cancelled' ? <Pill c="p-mut">Отменено</Pill> : isLate ? <Pill c="p-bad">Не отмечено</Pill>
-                    : s.marked > 0 ? <Pill c="p-ok">Отмечено · {s.marked}</Pill> : <Pill c="p-acc">0/{s.expected}</Pill>}
+                    : s.marked > 0 ? <Pill c="p-ok">Пришли {s.present} из {s.marked}</Pill> : <Pill c="p-acc">0/{s.expected}</Pill>}
                 </button>
                 {office && s.status === 'planned' && <SessionActions s={s} reload={reload} />}
                 {office && s.status === 'cancelled' && <div className="acts"><button className="btn sm ghost" onClick={async () => {
