@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { rpc, supabase, money, dm, hm, todayISO, phonePretty, type Me } from '../lib'
 import { useLoad, Loading, Err, Sheet, Pill, Chips, toast } from '../ui'
+import IndivWeek, { type Preset } from './IndivWeek'
 
 type L = { id: string; coach_id: string; coach_name: string; branch_id: string | null; branch: string | null; date: string; start_time: string | null
   duration_min: number; client_name: string; phone: string | null; price: number; cash: number; rate: number | null; note: string | null
@@ -15,7 +16,12 @@ export default function Indiv({ me }: { me: Me }) {
   const [month, setMonth] = useState(monthNow())
   const [coach, setCoach] = useState<string>('all')
   const { data, error, reload } = useLoad(() => rpc<L[]>('indiv_list', { p_month: month + '-01', p_coach: office && coach !== 'all' ? coach : null }), [month, coach])
-  const [edit, setEdit] = useState<L | 'new' | null>(null)
+  const [edit, setEdit] = useState<L | 'new' | Preset | null>(null)
+  const [view, setView] = useState<'list' | 'week'>('week')
+  const [wkKey, setWkKey] = useState(0)
+  async function openById(id: string, date: string) {
+    try { const r = await rpc<L[]>('indiv_list', { p_month: date.slice(0, 7) + '-01', p_coach: null }); const x = r.find((y) => y.id === id); if (x) setEdit(x) } catch (e: any) { toast(e.message) }
+  }
   const alive = (data || []).filter((x) => !x.cancelled)
   const live = alive.filter((x) => !x.planned)
   const upcoming = alive.filter((x) => x.planned && x.date >= todayISO()).length
@@ -26,6 +32,9 @@ export default function Indiv({ me }: { me: Me }) {
   return (
     <>
       <button className="btn" onClick={() => setEdit('new')}>{office ? '+ Записать / внести занятие' : '+ Провёл индивидуальное'}</button>
+      <Chips options={[['week', 'Неделя'], ['list', 'Список за месяц']]} value={view} onChange={(v) => setView(v as 'list' | 'week')} />
+      {view === 'week' && <IndivWeek me={me} reloadKey={wkKey} onOpen={openById} onNew={(p) => setEdit(p)} />}
+      {view === 'list' && <>
       <input type="month" value={month} max={monthNow()} onChange={(e) => setMonth(e.target.value)} aria-label="Месяц" />
       {office && coaches.length > 1 && <Chips options={[['all', 'Все тренеры'], ...coaches] as [string, string][]} value={coach} onChange={setCoach} />}
       <div className="stats">
@@ -48,16 +57,17 @@ export default function Indiv({ me }: { me: Me }) {
       </div>}
       {!office && <p className="note">Нажимайте «Провёл» только после занятия. Если администратор записал клиента заранее, откройте запись и подтвердите её. Наличные сразу попадают в вашу кассу («Касса» → сдать администратору). Исправить или удалить можно 7 дней.</p>}
       {office && <p className="note">Запись вперёд не попадает ни в кассу, ни в зарплату. Тренер подтверждает её кнопкой «Провёл» после занятия.</p>}
-      {edit && <EditIndiv l={edit === 'new' ? null : edit} me={me} onClose={(ok) => { setEdit(null); if (ok) reload() }} />}
+      </>}
+      {edit && <EditIndiv l={edit === 'new' || 'time' in edit ? null : edit} preset={edit !== 'new' && 'time' in edit ? edit : undefined} me={me} onClose={(ok) => { setEdit(null); if (ok) { reload(); setWkKey((k) => k + 1) } }} />}
     </>
   )
 }
 
-function EditIndiv({ l, me, onClose }: { l: L | null; me: Me; onClose: (ok: boolean) => void }) {
+function EditIndiv({ l, me, onClose, preset }: { l: L | null; me: Me; onClose: (ok: boolean) => void; preset?: Preset }) {
   const clients = useLoad(() => (l || me.role !== 'coach' ? Promise.resolve([] as Client[]) : rpc<Client[]>('indiv_clients')), [])
   const branches = useLoad(async () => (await supabase.from('branches').select('id,name').eq('active', true).order('sort')).data || [], [])
-  const [date, setDate] = useState(l?.date ?? todayISO())
-  const [time, setTime] = useState(l?.start_time ? hm(l.start_time) : '')
+  const [date, setDate] = useState(l?.date ?? preset?.date ?? todayISO())
+  const [time, setTime] = useState(l?.start_time ? hm(l.start_time) : preset?.time ?? '')
   const [branch, setBranch] = useState<string | null>(l?.branch_id ?? null)
   const [client, setClient] = useState(l?.client_name ?? '')
   const [phone, setPhone] = useState(l?.phone ?? '')
@@ -71,8 +81,8 @@ function EditIndiv({ l, me, onClose }: { l: L | null; me: Me; onClose: (ok: bool
   const [why, setWhy] = useState('')
   const office = me.role !== 'coach'
   const coachList = useLoad(() => (office ? rpc<{ id: string; full_name: string }[]>('indiv_coaches') : Promise.resolve([])), [])
-  const [coachSel, setCoachSel] = useState<string | null>(l?.coach_id ?? null)
-  const [plan, setPlan] = useState<boolean>(l ? l.planned : office)
+  const [coachSel, setCoachSel] = useState<string | null>(l?.coach_id ?? preset?.coach ?? null)
+  const [plan, setPlan] = useState<boolean>(l ? l.planned : office && !(preset && preset.date < todayISO()))
   const pick = (c: Client) => { setClient(c.client_name); setPhone(c.phone ?? ''); setPrice(String(c.price)); setDur(String(c.duration_min)); if (c.branch_id) setBranch(c.branch_id) }
   const minDate = plan ? todayISO() : me.role === 'coach' ? new Date(Date.now() - 7 * 864e5).toISOString().slice(0, 10) : undefined
   const notYet = !office && !!l?.planned && date > todayISO()

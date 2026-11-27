@@ -218,3 +218,23 @@ table.jr thead .jr-p{background:var(--surface-2)}
 .jr-b.off{background:var(--surface-2)} .jr-b.plan{color:var(--muted)} .jr-b.mut{color:var(--muted)}
 .jr-pay{background:none;border:0;padding:2px;cursor:pointer;font:inherit;color:inherit}
 table.jr tfoot td{font-weight:600}
+
+/* Недельный календарь индивидуальных */
+.wk-nav{display:flex;gap:8px;justify-content:center}
+.wk-scroll{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+.wk{display:grid;min-width:0;width:max-content;min-width:100%}
+.wk-h{position:sticky;top:0;text-align:center;font-size:12px;font-weight:600;padding:6px 2px;color:var(--muted);border-bottom:1px solid var(--line);background:var(--surface-2)}
+.wk-h.now{color:var(--accent)}
+.wk-hours{font-size:11px;color:var(--muted);text-align:right;padding-right:4px;font-variant-numeric:tabular-nums}
+.wk-hours div{border-top:1px solid var(--line);padding-top:2px}
+.wk-col{position:relative;border-left:1px solid var(--line)}
+.wk-cell{position:absolute;left:0;right:0;border:0;border-top:1px solid var(--line);background:transparent;padding:0;cursor:default}
+.wk-cell.free{background:var(--ok-soft);cursor:pointer;opacity:.75}
+.wk-cell.free:hover{opacity:1}
+.wk-b{position:absolute;overflow:hidden;text-align:left;font:500 11px/1.25 var(--body);padding:2px 4px;border-radius:6px;border:1px solid var(--line);color:var(--fg);z-index:1}
+.wk-b.grp{background:var(--surface-2);color:var(--muted);cursor:default}
+.wk-b.done{background:var(--accent-soft);border-color:var(--accent);cursor:pointer}
+.wk-b.plan{background:var(--warn-soft);border:1px dashed var(--warn);cursor:pointer}
+.wk-legend{display:flex;flex-wrap:wrap;gap:10px;font-size:12px;color:var(--muted)}
+.wk-legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:4px;border:1px solid var(--line)}
+.wk-legend i.free{background:var(--ok-soft)}.wk-legend i.grp{background:var(--surface-2)}.wk-legend i.plan{background:var(--warn-soft);border-style:dashed}.wk-legend i.done{background:var(--accent-soft);border-color:var(--accent)}
