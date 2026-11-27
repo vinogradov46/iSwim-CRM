@@ -142,6 +142,9 @@ label,.lbl{font-size:12px;color:var(--muted);font-weight:600;text-transform:uppe
 .tabs{position:fixed;left:0;right:0;bottom:0;background:var(--surface);border-top:1px solid var(--line);z-index:15;padding:6px max(8px,env(safe-area-inset-right,0px)) calc(6px + env(safe-area-inset-bottom,0px)) max(8px,env(safe-area-inset-left,0px))}
 .tabs-in{max-width:480px;margin:0 auto;display:grid;gap:4px;font-size:12.5px}
 .tab{border:0;background:none;color:var(--muted);font:600 1em var(--body);padding:8px 2px;border-radius:10px;cursor:pointer;position:relative}
+.tabs-in.scroll{display:flex;overflow-x:auto;scrollbar-width:none;font-size:12.5px}
+.tabs-in.scroll::-webkit-scrollbar{display:none}
+.tabs-in.scroll .tab{flex:0 0 auto;padding:8px 12px}
 .tab[aria-current="page"]{color:var(--accent);background:var(--accent-soft)}
 .tab .dot{position:absolute;top:4px;right:calc(50% - 26px);background:var(--bad);color:#fff;border-radius:999px;font-size:10px;padding:0 5px;line-height:15px;font-variant-numeric:tabular-nums}
 .big{font-family:var(--display);font-size:28px;font-weight:500;font-variant-numeric:tabular-nums}
@@ -168,6 +171,8 @@ input[type=file]{padding:8px}
   .app>header{display:none}
   .mob-only{display:none!important}
   .tabs-in{order:1}
+  .tabs-in.scroll{display:grid;overflow:visible}
+  .tabs-in.scroll .tab{padding:11px 12px}
   .side-me{order:2;display:flex;flex-direction:column;gap:2px;margin-top:auto;padding:12px;border-top:1px solid var(--line)}
   .side-me .btn{margin-top:8px;align-self:flex-start}
   .tabs{left:0;top:0;bottom:0;right:auto;width:220px;border-top:0;border-right:1px solid var(--line);padding:22px 14px;display:flex;flex-direction:column;gap:22px}
@@ -243,3 +248,9 @@ table.jr tfoot td{font-weight:600}
 .wk-day{background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden}
 .wk-r.plan{background:var(--warn-soft)}.wk-r.done{background:var(--accent-soft)}.wk-r.grp{color:var(--muted)}
 .wk-free{padding:10px 14px;display:flex;flex-direction:column;gap:6px}
+
+/* Аналитика */
+.an-row{align-items:flex-start}
+.an-bar{display:block;height:6px;border-radius:99px;background:var(--surface-2);margin-top:6px;overflow:hidden}
+.an-bar i{display:block;height:100%;background:var(--accent);border-radius:99px}
+.an-bar i.full{background:var(--ok)}.an-bar i.low{background:var(--warn)}

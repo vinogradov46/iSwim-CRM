@@ -7,6 +7,7 @@ import Children from './screens/Children'
 import Payments from './screens/Payments'
 import Cash from './screens/Cash'
 import { Salary } from './screens/Director'
+import Analytics from './screens/Analytics'
 import Staff from './screens/Staff'
 import Indiv from './screens/Indiv'
 import { TgButton } from './screens/Tg'
@@ -15,7 +16,7 @@ const ROLE: Record<string, string> = { director: 'Директор', admin: 'А�
 const TABS: Record<string, [string, string][]> = {
   coach: [['today', 'Сегодня'], ['kids', 'Дети'], ['groups', 'Группы'], ['cash', 'Касса']],
   admin: [['today', 'Сегодня'], ['kids', 'Дети'], ['pay', 'Оплаты'], ['indiv', 'Индивидуальные']],
-  director: [['today', 'Сегодня'], ['kids', 'Дети'], ['pay', 'Оплаты'], ['indiv', 'Индивидуальные'], ['salary', 'Зарплата'], ['team', 'Команда']],
+  director: [['today', 'Сегодня'], ['kids', 'Дети'], ['pay', 'Оплаты'], ['indiv', 'Индивидуальные'], ['stats', 'Аналитика'], ['salary', 'Зарплата'], ['team', 'Команда']],
 }
 /** Вход по телефону: в Supabase это e-mail вида 375291234567@staff.iswim.by */
 const staffEmail = (e164: string) => `${e164.slice(1)}@staff.iswim.by`
@@ -46,7 +47,7 @@ export default function App() {
 
   const tabs = me.role === 'coach' && me.indiv_enabled ? [...TABS.coach.slice(0, 2), ['indiv', 'Индивидуальные'] as [string, string], ...TABS.coach.slice(2)] : TABS[me.role]
   const body = tab === 'today' ? <Today me={me} /> : tab === 'kids' ? <Children me={me} /> : tab === 'groups' ? <Groups me={me} /> : tab === 'pay' ? <Payments me={me} />
-    : tab === 'cash' ? <Cash me={me} /> : tab === 'salary' ? <Salary /> : tab === 'indiv' ? <Indiv me={me} /> : <Staff />
+    : tab === 'cash' ? <Cash me={me} /> : tab === 'stats' ? <Analytics /> : tab === 'salary' ? <Salary /> : tab === 'indiv' ? <Indiv me={me} /> : <Staff />
   return (
     <>
       <div className="app">
@@ -63,9 +64,9 @@ export default function App() {
         <div className="side-brand">i<span>Swim</span> CRM</div>
         <div className="side-me"><div className="name">{me.full_name}</div><div className="meta">{ROLE[me.role]}</div>
           <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap' }}><TgButton /><button className="btn sm ghost" onClick={() => supabase.auth.signOut()}>Выйти</button></div></div>
-        <div className="tabs-in" style={{ gridTemplateColumns: tabs.map(([, l]) => `${Math.max(l.length, 5)}fr`).join(' '), fontSize: tabs.length > 5 ? 11 : undefined }}>
+        <div className={`tabs-in${tabs.length > 6 ? ' scroll' : ''}`} style={tabs.length > 6 ? undefined : { gridTemplateColumns: tabs.map(([, l]) => `${Math.max(l.length, 5)}fr`).join(' '), fontSize: tabs.length > 5 ? 11 : undefined }}>
           {tabs.map(([id, l]) => (
-            <button key={id} className="tab" aria-current={tab === id ? 'page' : undefined} onClick={() => { setTab(id); window.scrollTo(0, 0) }}>{l}</button>
+            <button key={id} className="tab" aria-current={tab === id ? 'page' : undefined} onClick={(e) => { setTab(id); window.scrollTo(0, 0); e.currentTarget.scrollIntoView({ inline: 'center', block: 'nearest', behavior: 'smooth' }) }}>{l}</button>
           ))}
         </div>
       </nav>
